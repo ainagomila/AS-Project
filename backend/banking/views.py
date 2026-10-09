@@ -1,9 +1,10 @@
 from rest_framework.response import Response
 
 from common.http import text
+from common.validators import has_text
 from iam.views import AuthenticatedView
 
-from . import services
+from . import card_services, services
 
 
 class AccountListView(AuthenticatedView):
@@ -32,3 +33,51 @@ class AccountDetailView(AuthenticatedView):
     def delete(self, request, dni, iban):
         services.delete_account(dni, iban, text(request, "pin"))
         return Response(status=204)
+
+
+class UserCardsView(AuthenticatedView):
+    def get(self, request, dni):
+        return Response(card_services.list_user_cards(dni))
+
+
+class AccountCardsView(AuthenticatedView):
+    def get(self, request, dni, iban):
+        return Response(card_services.list_account_cards(dni, iban))
+
+    def post(self, request, dni, iban):
+        body = card_services.add_card(
+            dni,
+            iban,
+            text(request, "pan"),
+            text(request, "expireDate"),
+            text(request, "alias"),
+            text(request, "cvv"),
+            text(request, "pin"),
+            text(request, "type"),
+            text(request, "bank"),
+        )
+        return Response(body, status=201)
+
+
+class CardDetailView(AuthenticatedView):
+    def get(self, request, dni, iban, pan):
+        return Response(card_services.get_card(dni, pan))
+
+    def patch(self, request, dni, iban, pan):
+        alias, status = text(request, "alias"), text(request, "status")
+        result = None
+        if has_text(alias):
+            result = card_services.update_alias(dni, iban, pan, alias)
+        if has_text(status):
+            result = card_services.update_status(dni, iban, pan, status)
+        # With neither field the original answers 200 with an empty body.
+        return Response(result)
+
+    def delete(self, request, dni, iban, pan):
+        card_services.delete_card(dni, iban, pan, text(request, "pin"))
+        return Response(status=204)
+
+
+class VerifyCardView(AuthenticatedView):
+    def post(self, request, dni, iban, pan):
+        return Response(card_services.verify_card(dni, iban, pan, text(request, "pin")))
