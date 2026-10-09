@@ -38,6 +38,49 @@ port 8080.
 To get an administrator, register a user in the app and run
 `uv run python manage.py create_admin <dni>` in `backend/`, then log in again.
 
+## Test data
+
+Made-up values that pass both the frontend's and the backend's validation.
+
+**Users.** The DNI needs the right control letter. Sign-up also requires an
+adult birthdate and a Spanish mobile number (`+34` and 9 digits), and each DNI
+and phone can be registered once.
+
+| DNI | Phone |
+|---|---|
+| `11111111H` | `+34 600 111 111` |
+| `22222222J` | `+34 600 222 222` |
+| `33333333P` | `+34 600 333 333` |
+| `44444444A` | `+34 600 444 444` |
+| `55555555K` | `+34 600 555 555` |
+| `12345678Z` | `+34 600 123 456` |
+
+A password that meets the rules (8+ characters, upper, lower, digit, special):
+`Secret_123`. The user PIN is any 6 digits, for example `123456`.
+
+**Accounts.** Spanish IBANs with valid check digits, for "Add account". Each
+IBAN can be added once. Every new user also gets a "Kofre" account with a
+random IBAN and 100 EUR, which is the one to use as a transfer destination.
+
+| IBAN |
+|---|
+| `ES9121000418450200051332` |
+| `ES6800491500042110123456` |
+| `ES8001822370440201234567` |
+| `ES9120385778966000123456` |
+| `ES2000810200280001234567` |
+
+**Cards.** Any 16 digits are accepted (there is no Luhn check); these are the
+usual test numbers. Each can be added once. Use a 3-digit CVV, a 4-digit card
+PIN and an expiry date in the future.
+
+| Card number | CVV | Card PIN |
+|---|---|---|
+| `4111 1111 1111 1111` | `123` | `1234` |
+| `5500 0000 0000 0004` | `456` | `4321` |
+| `4000 0000 0000 0002` | `789` | `0000` |
+| `5105 1051 0510 5100` | `321` | `9999` |
+
 ## Tests
 
 ```sh
