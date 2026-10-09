@@ -1,0 +1,443 @@
+﻿import { APIRequestContext } from '@playwright/test'
+import { API_BASE_URL } from './env'
+
+const DNI_LETTERS = 'TRWAGMYFPDXBNJZSQVHLCKE'
+const IBAN_COUNTRY_CODE = 'ES'
+const SPANISH_BANK_WEIGHTS = [4, 8, 5, 10, 9, 7, 3, 6]
+const SPANISH_ACCOUNT_WEIGHTS = [1, 2, 4, 8, 5, 10, 9, 7, 3, 6]
+
+function uniqueSuffix() {
+    return Math.floor(Date.now() % 1_000_000 + Math.random() * 1_000_000)
+        .toString(36)
+        .toUpperCase()
+}
+
+function randomDigits(length: number) {
+    return Array.from({ length }, () => Math.floor(Math.random() * 10)).join('')
+}
+
+function computeSpainControlDigit(value: string, weights: number[]) {
+    const sum = value
+        .split('')
+        .reduce((acc, digit, index) => acc + Number(digit) * weights[index], 0)
+    const remainder = 11 - (sum % 11)
+    if (remainder === 10) return 1
+    if (remainder === 11) return 0
+    return remainder
+}
+
+function computeIbanCheckDigits(countryCode: string, bban: string) {
+    const rearranged = `${bban}${countryCode}00`
+    const numeric = rearranged.replace(/[A-Z]/g, (char) => (char.charCodeAt(0) - 55).toString())
+    let remainder = 0
+    for (const digit of numeric) {
+        remainder = (remainder * 10 + Number(digit)) % 97
+    }
+    const checkDigits = 98 - remainder
+    return checkDigits.toString().padStart(2, '0')
+}
+
+function generateDniNumber() {
+    const digits = Math.floor(Math.random() * 100_000_000)
+        .toString()
+        .padStart(8, '0')
+    const letter = DNI_LETTERS[Number(digits) % 23]
+    return `${digits}${letter}`
+}
+
+function formatBirthdate(date: Date) {
+    const year = date.getFullYear()
+    const month = `${date.getMonth() + 1}`.padStart(2, '0')
+    const day = `${date.getDate()}`.padStart(2, '0')
+    return {
+        iso: `${year}-${month}-${day}`,
+        display: `${day}/${month}/${year}`,
+    }
+}
+
+function generatePhonePair() {
+    const local = `6${randomDigits(8)}`
+    return {
+        local,
+        e164: `+34${local}`,
+    }
+}
+
+function generateIban() {
+    const bank = (Math.floor(Math.random() * 9000) + 1000).toString()
+    const branch = randomDigits(4)
+    const account = randomDigits(10)
+    const firstControl = computeSpainControlDigit(bank + branch, SPANISH_BANK_WEIGHTS)
+    const secondControl = computeSpainControlDigit(account, SPANISH_ACCOUNT_WEIGHTS)
+    const bban = `${bank}${branch}${firstControl}${secondControl}${account}`
+    const checksum = computeIbanCheckDigits(IBAN_COUNTRY_CODE, bban)
+    return `${IBAN_COUNTRY_CODE}${checksum}${bban}`
+}
+
+function generatePan() {
+    return `4${randomDigits(15)}`
+}
+
+export type TestUser = {
+    name: string
+    dni: string
+    email: string
+    phoneLocal: string
+    phoneE164: string
+    password: string
+    pin: string
+    gender: 'female' | 'male' | 'other'
+    birthdateIso: string
+    birthdateDisplay: string
+}
+
+export function buildTestUser(overrides: Partial<TestUser> = {}): TestUser {
+    const birthdate = formatBirthdate(new Date(1990, 0, 15))
+    const phone = generatePhonePair()
+    const pin = overrides.pin ?? randomDigits(6)
+    return {
+        name: overrides.name ?? `Playwright User ${uniqueSuffix()}`,
+        dni: overrides.dni ?? generateDniNumber(),
+        email: overrides.email ?? `qa+${uniqueSuffix()}@kofre.app`,
+        phoneLocal: overrides.phoneLocal ?? phone.local,
+        phoneE164: overrides.phoneE164 ?? phone.e164,
+        password: overrides.password ?? `Pw1_${uniqueSuffix()}!`,
+        pin,
+        gender: overrides.gender ?? 'female',
+        birthdateIso: overrides.birthdateIso ?? birthdate.iso,
+        birthdateDisplay: overrides.birthdateDisplay ?? birthdate.display,
+    }
+}
+
+export type TestAccount = {
+    iban: string
+    name: string
+    bank: string
+    balance: number
+    currency: string
+}
+
+export function buildTestAccount(overrides: Partial<TestAccount> = {}): TestAccount {
+    return {
+        iban: overrides.iban ?? generateIban(),
+        name: overrides.name ?? `Savings ${uniqueSuffix()}`,
+        bank: overrides.bank ?? 'Kofre Test Bank',
+        balance: overrides.balance ?? Number((Math.random() * 5000 + 100).toFixed(2)),
+        currency: overrides.currency ?? 'EUR',
+    }
+}
+
+export type TestCard = {
+    pan: string
+    cvv: string
+    cardPin: string
+    alias: string
+    type: 'DEBIT' | 'CREDIT'
+    bank: string
+    expireMonth: string
+    expireYear: string
+    accountIban: string
+}
+
+export function buildTestCard(overrides: Partial<TestCard> = {}): TestCard {
+    const expireYear = overrides.expireYear ?? `${(new Date().getFullYear() + 2).toString().slice(-2)}`
+    return {
+        pan: overrides.pan ?? generatePan(),
+        cvv: overrides.cvv ?? randomDigits(3),
+        cardPin: overrides.cardPin ?? randomDigits(4),
+        alias: overrides.alias ?? `Travel ${uniqueSuffix()}`,
+        type: overrides.type ?? 'DEBIT',
+        bank: overrides.bank ?? 'Kofre Test Bank',
+        expireMonth: overrides.expireMonth ?? '12',
+        expireYear,
+        accountIban: overrides.accountIban ?? '',
+    }
+}
+
+export type TestUserCredentials = Pick<TestUser, 'dni' | 'pin' | 'password'>
+
+export async function registerUserViaApi(request: APIRequestContext, user: TestUser) {
+    const response = await request.post(`${API_BASE_URL}/auth/register`, {
+        data: {
+            name: user.name,
+            dni: user.dni,
+            email: user.email,
+            phone: user.phoneE164,
+            password: user.password,
+            birthdate: user.birthdateIso,
+            gender: user.gender,
+            pin: user.pin,
+        },
+    })
+
+    if (!response.ok()) {
+        throw new Error(
+            `Failed to register user ${user.dni}: ${response.status()} ${await response.text()}`,
+        )
+    }
+}
+
+function normalizeIban(iban: string) {
+    return String(iban ?? '')
+        .replace(/\s+/g, '')
+        .toUpperCase()
+}
+
+function normalizePan(pan: string) {
+    return String(pan ?? '').replace(/\s+/g, '')
+}
+
+export function ensurePaymentIdFormat(rawId: string) {
+    const trimmed = String(rawId ?? '').trim()
+    if (!trimmed) {
+        return ''
+    }
+    return trimmed.startsWith('PAY-') ? trimmed : `PAY-${trimmed.replace(/^PAY[-_]?/i, '')}`
+}
+
+export async function fetchAuthToken(request: APIRequestContext, dni: string, password: string) {
+    try {
+        const response = await request.post(`${API_BASE_URL}/auth/login`, {
+            data: {
+                dni,
+                password,
+            },
+        })
+
+        if (!response.ok()) {
+            console.warn(`Failed to login for auth token ${dni}: ${response.status()}`)
+            return null
+        }
+
+        const payload = await response.json()
+        if (!payload?.token) {
+            console.warn(`Auth token missing for ${dni}`)
+            return null
+        }
+
+        return payload.token as string
+    } catch (error) {
+        console.warn(`Error obtaining auth token for ${dni}:`, error)
+        return null
+    }
+}
+
+export async function deleteAccountViaApi(
+    request: APIRequestContext,
+    credentials: TestUserCredentials,
+    rawIban: string,
+    authToken?: string,
+) {
+    const iban = normalizeIban(rawIban)
+    if (!iban) {
+        return
+    }
+
+    try {
+        const token = authToken ?? (await fetchAuthToken(request, credentials.dni, credentials.password))
+        if (!token) {
+            return
+        }
+
+        const response = await request.delete(
+            `${API_BASE_URL}/users/${encodeURIComponent(credentials.dni)}/accounts/${encodeURIComponent(iban)}`,
+            {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+                data: {
+                    pin: credentials.pin,
+                },
+            },
+        )
+
+        if (!response.ok() && response.status() !== 404) {
+            console.warn(
+                `Failed to delete account ${iban} for ${credentials.dni}: ${response.status()} ${await response.text()}`,
+            )
+        }
+    } catch (error) {
+        console.warn(`Error during account deletion ${iban} for ${credentials.dni}:`, error)
+    }
+}
+
+export type UserAccountSummary = {
+    iban?: string
+    [key: string]: unknown
+}
+
+export async function listAccountsViaApi(
+    request: APIRequestContext,
+    credentials: TestUserCredentials,
+    authToken?: string,
+): Promise<UserAccountSummary[]> {
+    try {
+        const token = authToken ?? (await fetchAuthToken(request, credentials.dni, credentials.password))
+        if (!token) {
+            return []
+        }
+
+        const response = await request.get(
+            `${API_BASE_URL}/users/${encodeURIComponent(credentials.dni)}/accounts`,
+            {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            },
+        )
+
+        if (!response.ok()) {
+            if (response.status() !== 404) {
+                console.warn(
+                    `Failed to list accounts for ${credentials.dni}: ${response.status()} ${await response.text()}`,
+                )
+            }
+            return []
+        }
+
+        const payload = await response.json()
+        if (Array.isArray(payload)) {
+            return payload as UserAccountSummary[]
+        }
+        if (Array.isArray(payload?.accounts)) {
+            return payload.accounts as UserAccountSummary[]
+        }
+        if (Array.isArray(payload?.items)) {
+            return payload.items as UserAccountSummary[]
+        }
+        return []
+    } catch (error) {
+        console.warn(`Error listing accounts for cleanup ${credentials.dni}:`, error)
+        return []
+    }
+}
+
+export async function deleteCardViaApi(
+    request: APIRequestContext,
+    credentials: TestUserCredentials,
+    rawIban: string,
+    rawPan: string,
+    authToken?: string,
+) {
+    const iban = normalizeIban(rawIban)
+    const pan = normalizePan(rawPan)
+    if (!iban || !pan) {
+        return
+    }
+
+    try {
+        const token = authToken ?? (await fetchAuthToken(request, credentials.dni, credentials.password))
+        if (!token) {
+            return
+        }
+
+        const response = await request.delete(
+            `${API_BASE_URL}/users/${encodeURIComponent(credentials.dni)}/accounts/${encodeURIComponent(iban)}/cards/${encodeURIComponent(pan)}`,
+            {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+                data: {
+                    pin: credentials.pin,
+                },
+            },
+        )
+
+        if (!response.ok() && response.status() !== 404) {
+            console.warn(
+                `Failed to delete card ${pan} (${iban}) for ${credentials.dni}: ${response.status()} ${await response.text()}`,
+            )
+        }
+    } catch (error) {
+        console.warn(`Error during card deletion ${pan} for ${credentials.dni}:`, error)
+    }
+}
+
+export async function deletePaymentViaApi(
+    request: APIRequestContext,
+    credentials: TestUserCredentials,
+    rawIban: string,
+    rawPaymentId: string,
+    authToken?: string,
+) {
+    const iban = normalizeIban(rawIban)
+    const paymentId = ensurePaymentIdFormat(rawPaymentId)
+    if (!iban || !paymentId) {
+        return
+    }
+
+    try {
+        const token = authToken ?? (await fetchAuthToken(request, credentials.dni, credentials.password))
+        if (!token) {
+            return
+        }
+
+        const encodedUser = encodeURIComponent(credentials.dni)
+        const encodedIban = encodeURIComponent(iban)
+        const encodedPayment = encodeURIComponent(paymentId)
+        const endpoints = [
+            `${API_BASE_URL}/users/${encodedUser}/accounts/${encodedIban}/transfers/${encodedPayment}`,
+            `${API_BASE_URL}/users/${encodedUser}/accounts/${encodedIban}/payments/${encodedPayment}`,
+        ]
+
+        for (const endpoint of endpoints) {
+            const response = await request.delete(endpoint, {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+                data: {
+                    pin: credentials.pin,
+                },
+            })
+
+            if (response.ok()) {
+                return
+            }
+
+            if (response.status() === 404) {
+                continue
+            }
+
+            console.warn(
+                `Failed to delete payment ${paymentId} for ${credentials.dni}: ${response.status()} ${await response.text()}`,
+            )
+            return
+        }
+    } catch (error) {
+        console.warn(`Error during payment deletion ${paymentId} for ${credentials.dni}:`, error)
+    }
+}
+
+export async function deleteUserViaApi(
+    request: APIRequestContext,
+    dni: string,
+    pin: string,
+    password: string,
+    authToken?: string,
+) {
+    try {
+        const token = authToken ?? (await fetchAuthToken(request, dni, password))
+        if (!token) {
+            return
+        }
+
+        const response = await request.delete(`${API_BASE_URL}/users/${dni}`, {
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+            data: {
+                dni: dni.slice(-4),
+                pin,
+            },
+        })
+
+        if (!response.ok() && response.status() !== 404) {
+            console.warn(
+                `Failed to delete user ${dni}: ${response.status()} ${await response.text()}`,
+            )
+        }
+    } catch (error) {
+        console.warn(`Error during user deletion ${dni}:`, error)
+    }
+}
+
