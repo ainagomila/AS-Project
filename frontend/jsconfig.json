@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ]
+    }
+  },
+  "typeAcquisition": {
+    "enable": false
+  },
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}

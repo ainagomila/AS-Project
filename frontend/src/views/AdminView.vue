@@ -1,0 +1,266 @@
+<template>
+  <div class="page-container">
+    <header class="fixed-header">
+      <HeaderLayout title="Kofre" />
+    </header>
+
+    <main class="scroll-content">
+      <section class="admin-section">
+        <h2 class="admin-title">Users</h2>
+        <p v-if="error" class="admin-error" data-testid="admin-error">{{ error }}</p>
+
+        <table class="admin-table" data-testid="admin-users">
+          <thead>
+            <tr>
+              <th>DNI</th>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Phone</th>
+              <th>Role</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="user in users"
+              :key="user.dni"
+              :class="{ selected: selectedUser?.dni === user.dni }"
+              @click="selectUser(user)"
+            >
+              <td>{{ user.dni }}</td>
+              <td>{{ user.name }}</td>
+              <td>{{ user.email }}</td>
+              <td>{{ user.phone }}</td>
+              <td>{{ user.admin ? 'Admin' : 'User' }}</td>
+              <td>{{ user.active ? 'Active' : 'Disabled' }}</td>
+              <td>
+                <button
+                  class="admin-btn"
+                  :disabled="user.dni === userStore.dni"
+                  @click.stop="toggleActive(user)"
+                >
+                  {{ user.active ? 'Disable' : 'Enable' }}
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section v-if="selectedUser" class="admin-section">
+        <h2 class="admin-title">Accounts of {{ selectedUser.name }}</h2>
+        <p v-if="!accounts.length" class="admin-empty">No accounts.</p>
+        <table v-else class="admin-table" data-testid="admin-accounts">
+          <thead>
+            <tr>
+              <th>IBAN</th>
+              <th>Name</th>
+              <th>Bank</th>
+              <th>Balance</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="account in accounts"
+              :key="account.iban"
+              :class="{ selected: selectedAccount?.iban === account.iban }"
+              @click="selectAccount(account)"
+            >
+              <td>{{ account.iban }}</td>
+              <td>{{ account.name }}</td>
+              <td>{{ account.bank }}</td>
+              <td>{{ formatAmount(account.balance, account.currency) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section v-if="selectedAccount" class="admin-section">
+        <h2 class="admin-title">Transfers of {{ selectedAccount.iban }}</h2>
+        <p v-if="!transfers.length" class="admin-empty">No transfers.</p>
+        <table v-else class="admin-table" data-testid="admin-transfers">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Concept</th>
+              <th>Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(transfer, index) in transfers" :key="index">
+              <td>{{ formatDate(transfer.date) }}</td>
+              <td>{{ transfer.title }}</td>
+              <td>{{ formatAmount(transfer.amount, transfer.currency) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </main>
+  </div>
+</template>
+
+<script setup>
+import { onMounted, ref } from 'vue'
+import HeaderLayout from '@/components/layout/HeaderLayout.vue'
+import { useUserStore } from '@/stores/user'
+import {
+  getAllUsers,
+  setUserActive,
+  getUserAccounts,
+  getAccountTransfers,
+} from '@/api/adminService.js'
+
+const userStore = useUserStore()
+
+const users = ref([])
+const accounts = ref([])
+const transfers = ref([])
+const selectedUser = ref(null)
+const selectedAccount = ref(null)
+const error = ref('')
+
+function describe(e) {
+  return e.response?.data?.message || e.message || 'Unexpected error'
+}
+
+async function loadUsers() {
+  error.value = ''
+  try {
+    users.value = await getAllUsers()
+  } catch (e) {
+    console.error('Failed to load users:', e)
+    error.value = describe(e)
+  }
+}
+
+async function selectUser(user) {
+  selectedUser.value = user
+  selectedAccount.value = null
+  transfers.value = []
+  error.value = ''
+  try {
+    accounts.value = await getUserAccounts(user.dni)
+  } catch (e) {
+    console.error('Failed to load accounts:', e)
+    accounts.value = []
+    error.value = describe(e)
+  }
+}
+
+async function selectAccount(account) {
+  selectedAccount.value = account
+  error.value = ''
+  try {
+    transfers.value = await getAccountTransfers(selectedUser.value.dni, account.iban)
+  } catch (e) {
+    console.error('Failed to load transfers:', e)
+    transfers.value = []
+    error.value = describe(e)
+  }
+}
+
+async function toggleActive(user) {
+  error.value = ''
+  try {
+    const updated = await setUserActive(user.dni, !user.active)
+    user.active = updated.active
+  } catch (e) {
+    console.error('Failed to update user:', e)
+    error.value = describe(e)
+  }
+}
+
+function formatAmount(amount, currency) {
+  return `${Number(amount).toFixed(2)} ${currency || 'EUR'}`
+}
+
+function formatDate(value) {
+  return value ? new Date(value).toLocaleString() : ''
+}
+
+onMounted(loadUsers)
+</script>
+
+<style scoped>
+.page-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  font-family: 'Satoshi', sans-serif;
+  background-color: #222;
+  color: #fff;
+}
+
+.scroll-content {
+  flex: 1;
+  padding: 24px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.admin-section {
+  width: 100%;
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 20px 24px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-sizing: border-box;
+  overflow-x: auto;
+}
+
+.admin-title {
+  margin: 0 0 12px;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #f0d785;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.admin-table th,
+.admin-table td {
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.admin-table tbody tr {
+  cursor: pointer;
+}
+
+.admin-table tbody tr:hover,
+.admin-table tbody tr.selected {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.admin-btn {
+  padding: 4px 12px;
+  border-radius: 12px;
+  border: 1px solid #d5b76f;
+  background: transparent;
+  color: #f0d785;
+  cursor: pointer;
+}
+
+.admin-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.admin-error {
+  color: #ff8a80;
+  margin-bottom: 12px;
+}
+
+.admin-empty {
+  opacity: 0.7;
+}
+</style>
