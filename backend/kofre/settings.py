@@ -28,8 +28,12 @@ APPEND_SLASH = False
 
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": "kofredb",
+        "USER": "user",
+        "PASSWORD": "password",
+        "HOST": "db",
+        "PORT": 5432
     }
 }
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

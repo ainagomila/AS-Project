@@ -1,0 +1,45 @@
+services:
+  frontend:
+    build: 
+      context: ./frontend
+    container_name: kofre_frontend
+    environment:
+      VITE_API_PROXY_TARGET: http://backend:8080
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+
+  backend:
+    build:
+      context: ./backend
+    container_name: kofre_backend
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./backend:/app
+      - /app/.venv
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:18
+    container_name: kofre_db
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: kofredb
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "user", "-d", "kofredb"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+    volumes:
+      - db_data:/var/lib/postgresql
+
+volumes:
+  db_data:
