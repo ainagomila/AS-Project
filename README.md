@@ -13,6 +13,12 @@ security features are added on top of it on separate branches.
 **Run it locally only. Do not deploy it or put real data in it.**
 
 ## Run
+```sh
+docker compose build # first time only
+docker compose up
+```
+
+## Run (manually without Docker)
 
 Backend (needs [uv](https://docs.astral.sh/uv/) and Python 3.13):
 

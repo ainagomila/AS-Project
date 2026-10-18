@@ -9,6 +9,7 @@ dependencies = [
     "django-cors-headers>=4.7",
     "cryptography>=45",
     "schwifty>=2025.1",
+    "psycopg>=3.3.6",
 ]
 
 [dependency-groups]
