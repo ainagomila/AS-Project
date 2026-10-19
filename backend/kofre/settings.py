@@ -70,3 +70,8 @@ SECURITY_ENCRYPTION_KEY_FILE = os.environ.get(
 SECURITY_ENCRYPTION_KEY_BASE64 = os.environ.get("SECURITY_ENCRYPTION_KEY_BASE64", "")
 
 SESSION_TTL_SECONDS = 86_400  # 24h
+
+PASSWORD_HASHERS = [
+    "django.contrib.auth.hashers.Argon2PasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2PasswordHasher",
+]

@@ -11,7 +11,3 @@ RUN uv sync --locked
 COPY . .
 
 EXPOSE 8080
-
-RUN uv run python manage.py migrate
-
-CMD ["uv", "run", "python", "manage.py", "runserver", "0.0.0.0:8080"]

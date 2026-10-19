@@ -118,7 +118,8 @@ def register(name, dni, email, phone, password, birthdate, gender, pin):
 
     try:
         user = User(id=ids.generate("USER"), name=name)
-        user.password = v.validate_password(password)
+        #user.password = v.validate_password(password) -> changed!!!!
+        user.set_password(v.validate_password(password))
         user.pin = v.validate_user_pin(pin)
         user.dni = v.validate_dni(dni)
         user.phone_prefix, user.phone_number = prefix, number
@@ -151,7 +152,7 @@ def login(dni, password):
     user = find_by_dni(dni)
     if user is None:
         raise AppError("USER_NOT_FOUND", "Usuari inexistent")
-    if user.password != password:
+    if not user.check_password(password):
         raise AppError("INVALID_CREDENTIALS", "Credencials invàlides")
     if not user.is_active:
         raise AppError("USER_DISABLED", "L'usuari està deshabilitat")
@@ -264,11 +265,15 @@ def update_password(dni, pin, password):
     user = _user_with_pin(dni, pin)
     if not has_text(password):
         raise AppError("APPLICATION_ERROR", "Cal informar 'password' per actualitzar.")
-    if user.password != password:
-        try:
-            user.password = v.validate_password(password)
-        except ValueError as exc:
-            raise AppError("INVALID_PASSWORD_FORMAT", str(exc)) from None
+    #if user.password != password:
+    #    try:
+    #        user.password = v.validate_password(password)
+    #    except ValueError as exc:
+    #        raise AppError("INVALID_PASSWORD_FORMAT", str(exc)) from None
+    try:
+            user.set_password(v.validate_password(password))
+    except ValueError as exc:
+        raise AppError("INVALID_PASSWORD_FORMAT", str(exc)) from None
     user.save()
     return user_response(user)
 
@@ -291,10 +296,11 @@ def delete_user(dni, pin):
     # payments are left behind, as in the original.
     _require_pin(dni, pin).delete()
 
-
 def verify_pin(dni, pin):
     return {"pin": _user_with_pin(dni, pin).pin}
 
 
 def verify_password(dni, pin):
-    return {"password": _user_with_pin(dni, pin).password}
+    #return {"password": _user_with_pin(dni, pin).password}
+    _user_with_pin(dni, pin)
+    return {"verified":True}

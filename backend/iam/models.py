@@ -1,4 +1,5 @@
 from django.db import models
+from django.contrib.auth.hashers import check_password, make_password
 from django.utils import timezone
 
 from common import crypto
@@ -14,10 +15,11 @@ class User(models.Model):
     birthdate = models.DateField()
     gender = models.CharField(max_length=8)
 
-    # Password and PIN are stored with reversible encryption, as in the original.
-    password_iv = models.CharField(max_length=32)
-    password_ciphertext = models.TextField()
-    password_tag = models.CharField(max_length=32)
+    # Changed the password models to encoded hash! 
+    #password_iv = models.CharField(max_length=32)
+    #password_ciphertext = models.TextField()
+    #password_tag = models.CharField(max_length=32)
+    password = models.CharField(max_length = 128)
     pin_iv = models.CharField(max_length=32)
     pin_ciphertext = models.TextField()
     pin_tag = models.CharField(max_length=32)
@@ -25,13 +27,17 @@ class User(models.Model):
     is_admin = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
 
-    @property
-    def password(self):
-        return crypto.decrypt(self.password_iv, self.password_ciphertext, self.password_tag)
+    #@property
+    #def password(self):
+    #    return crypto.decrypt(self.password_iv, self.password_ciphertext, self.password_tag)
+    def set_password(self, raw):
+          self.password = make_password(raw)
 
-    @password.setter
-    def password(self, plain):
-        self.password_iv, self.password_ciphertext, self.password_tag = crypto.encrypt(plain)
+    #@password.setter
+    #def password(self, plain):
+    #    self.password_iv, self.password_ciphertext, self.password_tag = crypto.encrypt(plain)
+    def check_password(self, raw):
+        return check_password(raw, self.password)
 
     @property
     def pin(self):
