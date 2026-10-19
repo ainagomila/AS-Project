@@ -16,13 +16,19 @@ def luhn_checksum(card_number: int) -> int:
 def is_luhn_valid(card_number: int) -> bool:
     return luhn_checksum(card_number) == 0
 
-def is_valid_PAN(value: str) -> bool:
+def is_valid_PAN(value: str) -> str:
     is_valid_length = len(value) >= 13 and len(value) <= 18
-    return is_valid_length and value.isdigit() and is_luhn_valid(int(value))
+    if is_valid_length and value.isdigit() and is_luhn_valid(int(value)):
+        return value
+    raise ValueError("PAN not valid")
 
-def is_valid_CVV(value: str) -> bool:
-    return len(value) == 3 and value.isdigit()
+def is_valid_CVV(value: str) -> str:
+    if len(value) == 3 and value.isdigit():
+        return value
+    raise ValueError("Invalid CVV")
 
-def is_valid_date(value: str) -> bool:
+def is_valid_date(value: str) -> str:
     MM_YY = re.compile(r'(0[1-9]|1[0-2])/[0-9]{2}')
-    return MM_YY.fullmatch(value) is not None
+    if MM_YY.fullmatch(value) is not None:
+        return value
+    raise ValueError("Invalid expiration date")
