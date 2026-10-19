@@ -11,6 +11,8 @@ cd backend
 uv sync
 uv run python manage.py generate_key   # writes .env.d/encryptionKey64.json
 uv run python manage.py migrate
+# Debian/Ubuntu only: needed for Firefox to trust the local certificate
+sudo apt install libnss3-tools
 mkcert -install
 mkdir .certs
 mkcert -cert-file .certs/localhost.pem -key-file .certs/localhost-key.pem localhost 127.0.0.1 ::1 backend
