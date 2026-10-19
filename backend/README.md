@@ -11,13 +11,20 @@ cd backend
 uv sync
 uv run python manage.py generate_key   # writes .env.d/encryptionKey64.json
 uv run python manage.py migrate
-uv run python manage.py runserver 8080
+mkcert -install
+mkdir .certs
+mkcert -cert-file .certs/localhost.pem -key-file .certs/localhost-key.pem localhost 127.0.0.1 ::1 backend
+uv run python manage.py runserver_https 8080
 ```
 
-The API is then at `http://localhost:8080`. The frontend's dev proxy expects that port.
+The API is then at `https://localhost:8080`. The frontend's HTTPS dev proxy
+expects that port.
 
 The field-encryption key can also be given as `SECURITY_ENCRYPTION_KEY_BASE64`
 (32 random bytes, base64). See `.env.example`.
+
+The Docker startup script installs `mkcert` when necessary, then creates and
+trusts the local certificate before starting the containers.
 
 ## Administrator
 

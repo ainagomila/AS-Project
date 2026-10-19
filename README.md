@@ -13,10 +13,25 @@ security features are added on top of it on separate branches.
 **Run it locally only. Do not deploy it or put real data in it.**
 
 ## Run
-```sh
-docker compose build # first time only
-docker compose up
+The scripts use [mkcert](https://github.com/FiloSottile/mkcert) to create and
+trust a local development certificate on the host before Docker starts.
+
+To automate certificate setup and start Docker on Windows, run:
+
+```powershell
+.\scripts\start-docker.ps1
 ```
+
+On macOS or Linux, run:
+
+```sh
+./scripts/start-docker.sh
+```
+
+These scripts install `mkcert` with the operating system's package manager
+when it is missing, run `mkcert -install`, create the certificate on the host,
+and then start Docker Compose. The package manager may ask for administrator
+approval.
 
 ## Run (manually without Docker)
 
@@ -27,7 +42,10 @@ cd backend
 uv sync
 uv run python manage.py generate_key
 uv run python manage.py migrate
-uv run python manage.py runserver 8080
+mkcert -install
+mkdir .certs
+mkcert -cert-file .certs/localhost.pem -key-file .certs/localhost-key.pem localhost 127.0.0.1 ::1 backend
+uv run python manage.py runserver_https 8080
 ```
 
 Frontend (needs Node 20.19+ or 22.12+):
@@ -38,8 +56,9 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:5173`. The dev server proxies `/api` to the backend on
-port 8080.
+Open `https://localhost:5173`. The certificate is stored in `backend/.certs/`
+and trusted by `mkcert`. The backend is available at
+`https://localhost:8080`.
 
 To get an administrator, register a user in the app and run
 `uv run python manage.py create_admin <dni>` in `backend/`, then log in again.
@@ -96,7 +115,7 @@ cd frontend && npx playwright test   # browser tests
 ```
 
 The frontend integration and browser tests talk to a running backend on
-`http://localhost:8080` and leave their test users in its database.
+`https://localhost:8080` and leave their test users in its database.
 
 ## Docs
 

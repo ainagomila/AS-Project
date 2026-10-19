@@ -4,12 +4,17 @@ services:
       context: ./frontend
     container_name: kofre_frontend
     environment:
-      VITE_API_PROXY_TARGET: http://backend:8080
+      VITE_API_PROXY_TARGET: https://backend:8080
+      VITE_HTTPS: "true"
+      VITE_HTTPS_CERT: /certs/localhost.pem
+      VITE_HTTPS_KEY: /certs/localhost-key.pem
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
     ports:
       - "5173:5173"
     volumes:
       - ./frontend:/app
       - /app/node_modules
+      - ./backend/.certs:/certs:ro
     depends_on:
       - backend
 

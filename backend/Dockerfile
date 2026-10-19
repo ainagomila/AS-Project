@@ -13,4 +13,4 @@ COPY . .
 EXPOSE 8080
 
 
-CMD ["sh", "-c", "uv run python manage.py migrate && uv run python manage.py runserver 0.0.0.0:8080"]
+CMD ["sh", "-c", "uv run python manage.py migrate && uv run python manage.py runserver_https 0.0.0.0:8080"]
