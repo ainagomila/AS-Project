@@ -29,7 +29,8 @@ def test_patch_email_phone_password_pin(ana):
 
     password = ana.client.patch(ana.url(), {"pin": PIN, "password": "Other_Pass_9"}, format="json")
     assert password.status_code == 200
-    assert User.objects.get(dni=DNI_A).password == "Other_Pass_9"
+    #assert User.objects.get(dni=DNI_A).password == "Other_Pass_9"
+    assert User.objects.get(dni=DNI_A).check_password("Other_Pass_9") 
 
     pin = ana.client.patch(ana.url(), {"pin": PIN, "newPin": "654321"}, format="json")
     assert pin.status_code == 200
@@ -59,7 +60,8 @@ def test_verify_endpoints(ana):
     password = ana.client.post(ana.url("/security/verify-password"), {"pin": PIN}, format="json")
     wrong = ana.client.post(ana.url("/security/verify-pin"), {"pin": "000000"}, format="json")
     assert (pin.status_code, pin.json()) == (200, {"pin": PIN})
-    assert (password.status_code, password.json()) == (200, {"password": PASSWORD})
+    #assert (password.status_code, password.json()) == (200, {"password": PASSWORD})
+    assert (password.status_code, password.json()) == (200, {"verified": True})
     assert (wrong.status_code, wrong.json()["code"]) == (422, "INVALID_PIN")
 
 
