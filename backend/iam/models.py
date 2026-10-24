@@ -1,41 +1,46 @@
 from django.db import models
 from django.contrib.auth.hashers import check_password, make_password
 from django.utils import timezone
+from django.contrib.auth.models import BaseUserManager, AbstractBaseUser
 
 from common import crypto
 
-
-class User(models.Model):
+class UserManager(BaseUserManager):
+    def create_user(self, dni, email, password=None, **extra_fields):
+        if not email: raise ValueError("Users must have an email address")
+        email=self.normalize_email(email)
+        user = self.model(dni=dni, email=email, **extra_fields)
+        user.set_password(password)
+        user.save(using=self._db)
+        return user
+    
+class User(AbstractBaseUser):
     id = models.CharField(primary_key=True, max_length=32)
-    dni = models.CharField(max_length=16, db_index=True)
+    email = models.CharField(max_length=255)    
+    dni = models.CharField(max_length=16, db_index=True, unique=True)
     name = models.CharField(max_length=255)
-    email = models.CharField(max_length=255)
     phone_prefix = models.CharField(max_length=8)
     phone_number = models.CharField(max_length=16)
     birthdate = models.DateField()
     gender = models.CharField(max_length=8)
-
-    # Changed the password models to encoded hash! 
-    #password_iv = models.CharField(max_length=32)
-    #password_ciphertext = models.TextField()
-    #password_tag = models.CharField(max_length=32)
+    is_active = models.BooleanField(default=True)
+    is_admin = models.BooleanField(default=False)
+    objects = UserManager()
     password = models.CharField(max_length = 128)
     pin_iv = models.CharField(max_length=32)
     pin_ciphertext = models.TextField()
     pin_tag = models.CharField(max_length=32)
+    USERNAME_FIELD = 'dni'
+    REQUIRED_FIELDS = []
 
-    is_admin = models.BooleanField(default=False)
-    is_active = models.BooleanField(default=True)
-
-    #@property
-    #def password(self):
-    #    return crypto.decrypt(self.password_iv, self.password_ciphertext, self.password_tag)
+    
+    def __str__(self):
+        return self.email
+    
     def set_password(self, raw):
           self.password = make_password(raw)
 
-    #@password.setter
-    #def password(self, plain):
-    #    self.password_iv, self.password_ciphertext, self.password_tag = crypto.encrypt(plain)
+    
     def check_password(self, raw):
         return check_password(raw, self.password)
 
@@ -63,3 +68,4 @@ class Session(models.Model):
     token = models.CharField(max_length=64, db_index=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="sessions")
     expires_at = models.DateTimeField()
+

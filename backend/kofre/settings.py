@@ -8,8 +8,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = "django-insecure-kofre-local-development-key"
 DEBUG = True
 ALLOWED_HOSTS = ["*"]
+AUTH_USER_MODEL = "iam.User"
 
 INSTALLED_APPS = [
+    "django.contrib.contenttypes",
+    "django.contrib.auth",
     "corsheaders",
     "common",
     "rest_framework",
