@@ -135,6 +135,7 @@ OAUTH2_PROVIDER = {
     "COMPLIANT_BCP_RFC9700_IMPLICIT_GRANT": True,
     "COMPLIANT_BCP_RFC9700_ACCESS_TOKEN_TRANSPORT": True,  # rejects the token in the query string
     "COMPLIANT_BCP_RFC9700_AUTHZ_RESPONSE_ISS": True,
+    "OAUTH2_VALIDATOR_CLASS": "iam.oauth_validators.KofreOAuth2Validator",
 }
 
 LOGIN_URL = "/accounts/login/"

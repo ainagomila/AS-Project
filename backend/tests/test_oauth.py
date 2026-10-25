@@ -4,6 +4,7 @@ import secrets
 from urllib.parse import parse_qs, urlencode, urlparse
 
 import pytest
+import json
 from django.test import Client
 from oauth2_provider.models import Application
 
@@ -99,3 +100,12 @@ def test_oidc_discovery_is_available():
     assert response.status_code == 200
     body = response.json()
     assert "authorization_endpoint" in body and "jwks_uri" in body
+
+def test_id_token_carries_the_dni(ana, oauth_app):
+    client = logged_in_client(ana)
+    verifier, challenge = pkce_pair()
+    code = parse_qs(urlparse(authorize(client, challenge)["Location"]).query)["code"][0]
+    body = exchange(client, code, verifier).json()
+    payload = body["id_token"].split(".")[1]
+    claims = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
+    assert claims["dni"] == DNI_A
