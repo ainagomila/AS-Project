@@ -3,6 +3,8 @@
 import os
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = "django-insecure-kofre-local-development-key"
@@ -13,17 +15,37 @@ AUTH_USER_MODEL = "iam.User"
 INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.auth",
+    "django.contrib.sessions",
     "corsheaders",
     "common",
     "rest_framework",
     "iam",
     "banking",
     "payments",
+    "oauth2_provider",
 ]
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+]
+
+TEMPLATES = [
+    {
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [BASE_DIR / "templates"],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+            ],
+        },
+    },
 ]
 
 ROOT_URLCONF = "kofre.urls"
@@ -82,3 +104,41 @@ PASSWORD_HASHERS = [
     "django.contrib.auth.hashers.Argon2PasswordHasher",
     "django.contrib.auth.hashers.PBKDF2PasswordHasher",
 ]
+
+
+def _load_oidc_key():
+    """OIDC RSA private key: file (default .env.d/oidc.key) or environment variable."""
+    path = Path(os.environ.get("OIDC_RSA_PRIVATE_KEY_FILE", BASE_DIR / ".env.d" / "oidc.key"))
+    key = path.read_text() if path.is_file() else os.environ.get("OIDC_RSA_PRIVATE_KEY", "")
+    if not key:
+        raise ImproperlyConfigured(
+            "Missing OIDC key. Generate it with: "
+            "mkdir -p backend/.env.d && openssl genrsa -out backend/.env.d/oidc.key 2048"
+        )
+    return key
+
+
+OAUTH2_PROVIDER = {
+    "ACCESS_TOKEN_EXPIRE_SECONDS": 300,
+    "SCOPES": {"openid": "OpenID Connect", "banking": "Access to the bank API"},
+    "OIDC_ENABLED": True,
+    "OIDC_RSA_PRIVATE_KEY": _load_oidc_key(),
+    "OIDC_RP_INITIATED_LOGOUT_ENABLED": True,
+    "PKCE_REQUIRED": True,                      # already the default; explicit on purpose
+    "ALLOWED_REDIRECT_URI_SCHEMES": ["https"],  # HTTPS redirect URIs only
+    "ROTATE_REFRESH_TOKEN": True,
+    "REFRESH_TOKEN_REUSE_PROTECTION": True,     # reusing an old refresh token revokes the session
+    "REFRESH_TOKEN_GRACE_PERIOD_SECONDS": 0,    # required to store hashed tokens
+    "COMPLIANT_BCP_RFC9700_TOKEN_STORAGE": True,  # store tokens hashed
+    "COMPLIANT_BCP_RFC9700_PKCE_METHOD": True,    # rejects "plain" PKCE
+    "COMPLIANT_BCP_RFC9700_PASSWORD_GRANT": True,
+    "COMPLIANT_BCP_RFC9700_IMPLICIT_GRANT": True,
+    "COMPLIANT_BCP_RFC9700_ACCESS_TOKEN_TRANSPORT": True,  # rejects the token in the query string
+    "COMPLIANT_BCP_RFC9700_AUTHZ_RESPONSE_ISS": True,
+}
+
+LOGIN_URL = "/accounts/login/"
+LOGIN_REDIRECT_URL = "/"
+SESSION_COOKIE_SECURE = True
+SESSION_COOKIE_HTTPONLY = True
+CSRF_COOKIE_SECURE = True

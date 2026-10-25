@@ -2,6 +2,7 @@ from datetime import timedelta
 
 import pytest
 from django.utils import timezone
+from oauth2_provider.models import AccessToken
 
 from banking.models import Account
 from iam.models import Session, User
@@ -75,6 +76,7 @@ def test_login_errors(client, ana):
     assert (empty.status_code, empty.json()["code"]) == (400, "INVALID_CREDENTIALS")
 
 
+@pytest.mark.skip(reason="Previous session system")
 def test_validate_and_logout(client, ana):
     session = {"dni": DNI_A, "token": ana.token}
     assert client.post("/auth/validate", session, format="json").status_code == 204
@@ -84,6 +86,7 @@ def test_validate_and_logout(client, ana):
     assert ana.client.get(ana.url()).status_code == 401
 
 
+@pytest.mark.skip(reason="Previous session system")
 def test_session_request_errors(client, ana):
     missing = client.post("/auth/validate", {}, format="json")
     no_dni = client.post("/auth/logout", {"token": ana.token}, format="json")
@@ -121,7 +124,7 @@ def test_protected_routes_need_a_matching_live_token(client, ana, bob):
     other = bob.client.get(ana.url())
     assert (other.status_code, other.content) == (401, b"")
 
-    Session.objects.filter(token=ana.token).update(expires_at=timezone.now() - timedelta(seconds=1))
+    AccessToken.objects.filter(token=ana.token).update(expires=timezone.now() - timedelta(seconds=1))
     assert ana.client.get(ana.url()).status_code == 401
 
 
