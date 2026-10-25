@@ -56,6 +56,7 @@ Set-Location (Join-Path $projectRoot "backend")
 New-Item -ItemType Directory -Force .certs | Out-Null
 mkcert -install
 mkcert -cert-file .certs/localhost.pem -key-file .certs/localhost-key.pem localhost 127.0.0.1 ::1 backend
+Copy-Item (Join-Path (mkcert -CAROOT) "rootCA.pem") .certs\rootCA.pem
 
 Set-Location $projectRoot
 Write-Host "Starting Docker Compose..."

@@ -52,6 +52,7 @@ cd "$PROJECT_ROOT/backend"
 mkdir -p .certs
 mkcert -install
 mkcert -cert-file .certs/localhost.pem -key-file .certs/localhost-key.pem localhost 127.0.0.1 ::1 backend
+cp "$(mkcert -CAROOT)/rootCA.pem" .certs/rootCA.pem
 
 cd "$PROJECT_ROOT"
 echo "Starting Docker Compose..."
