@@ -16,6 +16,7 @@ const TransferView = () => import('@/views/TransferView.vue')
 const ProfileView = () => import('@/views/ProfileView.vue')
 const TermsView = () => import('@/views/TermsView.vue')
 const AdminView = () => import('@/views/AdminView.vue')
+const CallbackView = () => import('@/views/CallbackView.vue')
 
 // Store
 import { useUserStore } from '@/stores/user'
@@ -47,6 +48,12 @@ const routes = [
     path: '/terms',
     name: 'Terms',
     component: TermsView,
+  },
+
+  {
+    path: '/callback',
+    name: 'Callback',
+    component: CallbackView,
   },
 
   // ======================

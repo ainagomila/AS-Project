@@ -92,6 +92,9 @@ CORS_ALLOWED_ORIGINS = [
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_METHODS = ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"]
 
+# Base URL of the Vue app: the OAuth redirect URI and the login page links use it.
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://localhost:5173")
+
 # Field encryption key (see common/crypto.py). The key file wins over the env var.
 SECURITY_ENCRYPTION_KEY_FILE = os.environ.get(
     "SECURITY_ENCRYPTION_KEY_FILE", str(BASE_DIR / ".env.d" / "encryptionKey64.json")

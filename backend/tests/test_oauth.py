@@ -2,6 +2,7 @@ import base64
 import hashlib
 import secrets
 from urllib.parse import parse_qs, urlencode, urlparse
+from rest_framework.test import APIClient
 
 import pytest
 import json
@@ -109,3 +110,32 @@ def test_id_token_carries_the_dni(ana, oauth_app):
     payload = body["id_token"].split(".")[1]
     claims = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
     assert claims["dni"] == DNI_A
+
+
+def test_issued_access_token_authenticates_api_calls(ana, oauth_app):
+    client = logged_in_client(ana)
+    verifier, challenge = pkce_pair()
+    code = parse_qs(urlparse(authorize(client, challenge)["Location"]).query)["code"][0]
+    access_token = exchange(client, code, verifier).json()["access_token"]
+
+    api = APIClient()
+    api.credentials(HTTP_AUTHORIZATION=f"Bearer {access_token}")
+    response = api.get(f"/users/{DNI_A}")
+    assert response.status_code == 200, response.content
+
+def test_create_oauth_client_is_idempotent(settings):
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    settings.FRONTEND_URL = "https://localhost:5173/"
+    call_command("create_oauth_client", stdout=StringIO())
+    settings.FRONTEND_URL = "https://localhost:4000"
+    call_command("create_oauth_client", stdout=StringIO())
+
+    app = Application.objects.get(client_id="kofre-web")
+    assert Application.objects.filter(client_id="kofre-web").count() == 1
+    assert app.redirect_uris == "https://localhost:4000/callback"
+    assert app.client_type == Application.CLIENT_PUBLIC
+    assert app.authorization_grant_type == Application.GRANT_AUTHORIZATION_CODE
+    assert app.algorithm == Application.RS256_ALGORITHM

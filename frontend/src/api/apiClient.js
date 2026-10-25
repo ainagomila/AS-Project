@@ -1,5 +1,6 @@
 // src/api/apiClient.js
 import axios from 'axios'
+import { userManager } from './oidc'
 
 const DEV_API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
 const PROD_API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://localhost:8080'
@@ -25,19 +26,16 @@ apiClient.interceptors.request.use((config) => {
   return config
 })
 
-apiClient.interceptors.request.use((config) => {
-  if (!globalThis.localStorage) {
-    return config
-  }
+// The access token is held in memory by the OIDC UserManager; nothing is read from storage.
+apiClient.interceptors.request.use(async (config) => {
+  const user = await userManager.getUser()
 
-  const token = globalThis.localStorage.getItem('authToken')
-
-  if (!token) {
+  if (!user || user.expired) {
     return config
   }
 
   config.headers = config.headers ?? {}
-  config.headers.Authorization = `Bearer ${token}`
+  config.headers.Authorization = `Bearer ${user.access_token}`
 
   return config
 })

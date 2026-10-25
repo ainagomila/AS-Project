@@ -30,8 +30,15 @@ On macOS or Linux, run:
 
 These scripts install `mkcert` with the operating system's package manager
 when it is missing, run `mkcert -install`, create the certificate on the host,
-and then start Docker Compose. The package manager may ask for administrator
-approval.
+copy mkcert's root certificate (`rootCA.pem`) next to it, and then start Docker
+Compose. The package manager may ask for administrator approval.
+
+`rootCA.pem` is what lets the frontend's dev proxy verify the backend's
+certificate. When the backend container starts it also generates the OIDC signing
+key (if missing), applies the migrations and creates the OAuth client `kofre-web`,
+so there is nothing else to set up. If you update from an older version of the
+branch, start with `docker compose up --build` (or run the script again) so the
+frontend image gets the new `oidc-client-ts` dependency.
 
 ## Run (manually without Docker)
 
@@ -41,12 +48,20 @@ Backend (needs [uv](https://docs.astral.sh/uv/) and Python 3.13):
 cd backend
 uv sync
 uv run python manage.py generate_key
-uv run python manage.py migrate
+mkdir -p .env.d && openssl genrsa -out .env.d/oidc.key 2048
 mkcert -install
 mkdir .certs
 mkcert -cert-file .certs/localhost.pem -key-file .certs/localhost-key.pem localhost 127.0.0.1 ::1 backend
+cp "$(mkcert -CAROOT)/rootCA.pem" .certs/rootCA.pem
+uv run python manage.py migrate
+uv run python manage.py create_oauth_client
 uv run python manage.py runserver_https 8080
 ```
+
+In PowerShell the copy is
+`Copy-Item (Join-Path (mkcert -CAROOT) "rootCA.pem") .certs\rootCA.pem`.
+Never copy `rootCA-key.pem`. If your Vue app is not served from
+`https://localhost:5173`, set `FRONTEND_URL` before running `create_oauth_client`.
 
 Frontend (needs Node 20.19+ or 22.12+):
 
@@ -59,6 +74,14 @@ npm run dev
 Open `https://localhost:5173`. The certificate is stored in `backend/.certs/`
 and trusted by `mkcert`. The backend is available at
 `https://localhost:8080`.
+
+## Signing in
+
+Login uses OAuth 2.0 (Authorization Code with PKCE) through django-oauth-toolkit.
+The Vue app redirects to the backend's login page (`/accounts/login/`), receives a
+code at `/callback` and exchanges it for a 5-minute access token. Tokens are kept
+in memory only, so reloading the page signs you in again through the backend (its
+session cookie makes that quick). `/signup` and "Forgot password?" stay in Vue.
 
 To get an administrator, register a user in the app and run
 `uv run python manage.py create_admin <dni>` in `backend/`, then log in again.

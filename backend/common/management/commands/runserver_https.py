@@ -24,6 +24,12 @@ class SecureWSGIServer(WSGIServer):
         )
         self.socket = context.wrap_socket(self.socket, server_side=True)
 
+    def setup_environ(self):
+        super().setup_environ()
+        # The socket is TLS, so tell WSGI the scheme is https. Without this Django
+        # builds http:// absolute URLs (OIDC discovery) and fails CSRF origin checks.
+        self.base_environ["HTTPS"] = "on"
+
 
 class Command(runserver.Command):
     help = "Run the local Django server over HTTPS with a trusted localhost certificate."
