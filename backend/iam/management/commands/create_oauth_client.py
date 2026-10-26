@@ -20,6 +20,7 @@ class Command(BaseCommand):
                 "client_type": Application.CLIENT_PUBLIC,  # a browser app cannot keep a secret
                 "authorization_grant_type": Application.GRANT_AUTHORIZATION_CODE,
                 "redirect_uris": redirect_uri,
+                "post_logout_redirect_uris": f"{settings.FRONTEND_URL.rstrip('/')}/",
                 "algorithm": Application.RS256_ALGORITHM,  # needed to sign the ID token
                 "skip_authorization": True,  # first-party app: no consent screen
             },

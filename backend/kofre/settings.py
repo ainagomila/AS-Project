@@ -127,6 +127,7 @@ OAUTH2_PROVIDER = {
     "OIDC_ENABLED": True,
     "OIDC_RSA_PRIVATE_KEY": _load_oidc_key(),
     "OIDC_RP_INITIATED_LOGOUT_ENABLED": True,
+    "OIDC_RP_INITIATED_LOGOUT_ALWAYS_PROMPT": False,  # we always send id_token_hint
     "PKCE_REQUIRED": True,                      # already the default; explicit on purpose
     "ALLOWED_REDIRECT_URI_SCHEMES": ["https"],  # HTTPS redirect URIs only
     "ROTATE_REFRESH_TOKEN": True,
