@@ -130,6 +130,7 @@ OAUTH2_PROVIDER = {
     "OIDC_RP_INITIATED_LOGOUT_ALWAYS_PROMPT": False,  # we always send id_token_hint
     "PKCE_REQUIRED": True,                      # already the default; explicit on purpose
     "ALLOWED_REDIRECT_URI_SCHEMES": ["https"],  # HTTPS redirect URIs only
+    "REFRESH_TOKEN_EXPIRE_SECONDS": 300,        # same as the access token: "extend" = 5 more minutes
     "ROTATE_REFRESH_TOKEN": True,
     "REFRESH_TOKEN_REUSE_PROTECTION": True,     # reusing an old refresh token revokes the session
     "REFRESH_TOKEN_GRACE_PERIOD_SECONDS": 0,    # required to store hashed tokens
@@ -146,4 +147,6 @@ LOGIN_URL = "/accounts/login/"
 LOGIN_REDIRECT_URL = "/"
 SESSION_COOKIE_SECURE = True
 SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_AGE = 60  # only needed during login; renewing uses the refresh token
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 CSRF_COOKIE_SECURE = True
