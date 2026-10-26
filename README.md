@@ -80,8 +80,13 @@ and trusted by `mkcert`. The backend is available at
 Login uses OAuth 2.0 (Authorization Code with PKCE) through django-oauth-toolkit.
 The Vue app redirects to the backend's login page (`/accounts/login/`), receives a
 code at `/callback` and exchanges it for a 5-minute access token. Tokens are kept
-in memory only, so reloading the page signs you in again through the backend (its
-session cookie makes that quick). `/signup` and "Forgot password?" stay in Vue.
+in memory only, so reloading the page signs you in again through the backend.
+`/signup` and "Forgot password?" stay in Vue.
+
+Sessions last 5 minutes: a minute before expiry the app offers to extend (5 more
+minutes) and otherwise signs out through `/o/logout/`, which revokes the tokens.
+Outside development set `DJANGO_SECRET_KEY`. Details are in section 7 of the
+[inventory](docs/vulnerability-inventory.md).
 
 To get an administrator, register a user in the app and run
 `uv run python manage.py create_admin <dni>` in `backend/`, then log in again.
@@ -138,7 +143,9 @@ cd frontend && npx playwright test   # browser tests
 ```
 
 The frontend integration and browser tests talk to a running backend on
-`https://localhost:8080` and leave their test users in its database.
+`https://localhost:8080` and leave their test users in its database. They sign in
+through OAuth, so run them with `E2E_BASE_URL=https://localhost:5173`
+(`npm run test:e2e:local` does it).
 
 ## Docs
 
