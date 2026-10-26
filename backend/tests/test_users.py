@@ -1,7 +1,7 @@
 import pytest
 
 from banking.models import Account
-from iam.models import Session, User
+from iam.models import User
 
 from .conftest import DNI_A, DNI_B, PASSWORD, PIN
 
@@ -74,5 +74,4 @@ def test_delete_user(ana):
     user_id = User.objects.get(dni=DNI_A).id
     assert ana.client.delete(ana.url(), {"pin": PIN}, format="json").status_code == 204
     assert not User.objects.filter(dni=DNI_A).exists()
-    assert not Session.objects.filter(user_id=user_id).exists()
     assert Account.objects.filter(user_id=user_id).count() == 1

@@ -17,23 +17,6 @@ class RegisterView(APIView):
         return Response(body, status=201)
 
 
-class LoginView(APIView):
-    def post(self, request):
-        return Response(services.login(text(request, "dni"), text(request, "password")))
-
-
-class LogoutView(APIView):
-    def post(self, request):
-        services.logout(text(request, "dni"), text(request, "token"))
-        return Response(status=204)
-
-
-class ValidateView(APIView):
-    def post(self, request):
-        services.validate(text(request, "dni"), text(request, "token"))
-        return Response(status=204)
-
-
 class ExistsView(APIView):
     def get(self, request, dni):
         services.exists(dni)

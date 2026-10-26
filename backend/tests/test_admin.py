@@ -3,7 +3,7 @@ from django.core.management import CommandError, call_command
 
 from iam.models import User
 
-from .conftest import DNI_A, DNI_B, PASSWORD, PIN
+from .conftest import DNI_A, DNI_B, PIN
 
 pytestmark = pytest.mark.django_db
 
@@ -19,10 +19,8 @@ def test_create_admin_needs_an_existing_user(db):
         call_command("create_admin", DNI_B)
 
 
-def test_admin_flag_is_reported(admin, client):
+def test_admin_flag_is_reported(admin):
     assert admin.client.get(admin.url()).json()["admin"] is True
-    login = client.post("/auth/login", {"dni": DNI_A, "password": PASSWORD}, format="json")
-    assert login.json()["user"]["admin"] is True
 
 
 def test_non_admin_is_refused_everywhere(ana, bob):
@@ -64,7 +62,7 @@ def test_admin_can_list_and_drill_down(admin, bob):
     assert (foreign_account.status_code, foreign_account.json()["code"]) == (404, "ACCOUNT_NOT_FOUND")
 
 
-def test_disable_and_enable_user(admin, bob, client):
+def test_disable_and_enable_user(admin, bob):
     bad = admin.client.patch(f"/admin/users/{DNI_B}", {"active": "no"}, format="json")
     assert (bad.status_code, bad.json()["code"]) == (400, "MISSING_FIELDS")
 
@@ -72,9 +70,7 @@ def test_disable_and_enable_user(admin, bob, client):
     assert (disabled.status_code, disabled.json()["active"]) == (200, False)
 
     existing_token = bob.client.get(bob.url())
-    login = client.post("/auth/login", {"dni": DNI_B, "password": PASSWORD}, format="json")
     assert (existing_token.status_code, existing_token.json()["code"]) == (403, "USER_DISABLED")
-    assert (login.status_code, login.json()["code"]) == (403, "USER_DISABLED")
 
     admin.client.patch(f"/admin/users/{DNI_B}", {"active": True}, format="json")
     assert bob.client.get(bob.url()).status_code == 200

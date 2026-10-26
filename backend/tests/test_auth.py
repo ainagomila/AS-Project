@@ -5,20 +5,19 @@ from django.utils import timezone
 from oauth2_provider.models import AccessToken
 
 from banking.models import Account
-from iam.models import Session, User
+from iam.models import User
 
-from .conftest import DNI_A, DNI_B, PASSWORD, PIN, register_payload
+from .conftest import DNI_A, DNI_B, PIN, register_payload
 
 pytestmark = pytest.mark.django_db
 
 
-def test_register_creates_user_session_and_initial_account(client):
+def test_register_creates_user_and_initial_account(client):
     response = client.post("/auth/register", register_payload(), format="json")
     assert response.status_code == 201
     body = response.json()
     assert body["message"] == "User registered successfully"
     user = User.objects.get(dni=DNI_A)
-    assert Session.objects.filter(user=user, token=body["token"]).exists()
     account = Account.objects.get(user_id=user.id)
     assert (account.name, account.bank, account.currency) == ("Kofre", "Kofre Bank", "EUR")
 
@@ -51,51 +50,6 @@ def test_register_duplicates(client, ana):
     assert (same_phone.status_code, same_phone.json()["code"]) == (409, "USER_ALREADY_EXISTS")
 
 
-def test_login_returns_token_and_user(client, ana):
-    response = client.post("/auth/login", {"dni": DNI_A, "password": PASSWORD}, format="json")
-    assert response.status_code == 200
-    body = response.json()
-    assert body["token"] != ana.token
-    assert body["user"] == {
-        "dni": DNI_A,
-        "name": "Ana Blanco",
-        "email": "user1234@example.com",
-        "phone": "+34600123456",
-        "birthdate": "1995-04-10",
-        "gender": "FEMALE",
-        "admin": False,
-    }
-
-
-def test_login_errors(client, ana):
-    wrong = client.post("/auth/login", {"dni": DNI_A, "password": "Nope_1234"}, format="json")
-    unknown = client.post("/auth/login", {"dni": DNI_B, "password": PASSWORD}, format="json")
-    empty = client.post("/auth/login", {"dni": DNI_A}, format="json")
-    assert (wrong.status_code, wrong.json()["code"]) == (400, "INVALID_CREDENTIALS")
-    assert (unknown.status_code, unknown.json()["code"]) == (404, "USER_NOT_FOUND")
-    assert (empty.status_code, empty.json()["code"]) == (400, "INVALID_CREDENTIALS")
-
-
-@pytest.mark.skip(reason="Previous session system")
-def test_validate_and_logout(client, ana):
-    session = {"dni": DNI_A, "token": ana.token}
-    assert client.post("/auth/validate", session, format="json").status_code == 204
-    assert client.post("/auth/logout", session, format="json").status_code == 204
-    after = client.post("/auth/validate", session, format="json")
-    assert (after.status_code, after.json()["code"]) == (403, "UNAUTHORIZED")
-    assert ana.client.get(ana.url()).status_code == 401
-
-
-@pytest.mark.skip(reason="Previous session system")
-def test_session_request_errors(client, ana):
-    missing = client.post("/auth/validate", {}, format="json")
-    no_dni = client.post("/auth/logout", {"token": ana.token}, format="json")
-    unknown = client.post("/auth/logout", {"dni": DNI_B, "token": ana.token}, format="json")
-    assert (missing.status_code, missing.json()["code"]) == (403, "UNAUTHORIZED")
-    assert (no_dni.status_code, no_dni.json()["code"]) == (400, "INVALID_DNI_FORMAT")
-    assert (unknown.status_code, unknown.json()["code"]) == (404, "USER_NOT_FOUND")
-
-
 def test_exists(client, ana):
     found = client.get(f"/auth/exists/{DNI_A}")
     assert (found.status_code, found.json()) == (200, True)
@@ -106,8 +60,7 @@ def test_exists(client, ana):
 def test_reset_password_with_pin(client, ana):
     body = {"dni": DNI_A, "pin": PIN, "newPassword": "Brand_New_1"}
     assert client.post("/auth/reset-password", body, format="json").status_code == 204
-    login = client.post("/auth/login", {"dni": DNI_A, "password": "Brand_New_1"}, format="json")
-    assert login.status_code == 200
+    assert User.objects.get(dni=DNI_A).check_password("Brand_New_1")
 
     wrong_pin = client.post("/auth/reset-password", {**body, "pin": "000000"}, format="json")
     weak = client.post("/auth/reset-password", {**body, "newPassword": "weak"}, format="json")
@@ -126,9 +79,3 @@ def test_protected_routes_need_a_matching_live_token(client, ana, bob):
 
     AccessToken.objects.filter(token=ana.token).update(expires=timezone.now() - timedelta(seconds=1))
     assert ana.client.get(ana.url()).status_code == 401
-
-
-def test_login_purges_expired_sessions(client, ana):
-    Session.objects.filter(token=ana.token).update(expires_at=timezone.now() - timedelta(hours=1))
-    client.post("/auth/login", {"dni": DNI_A, "password": PASSWORD}, format="json")
-    assert not Session.objects.filter(token=ana.token).exists()

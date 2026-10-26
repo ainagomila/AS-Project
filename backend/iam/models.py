@@ -1,6 +1,5 @@
 from django.db import models
 from django.contrib.auth.hashers import check_password, make_password
-from django.utils import timezone
 from django.contrib.auth.models import BaseUserManager, AbstractBaseUser
 
 from common import crypto
@@ -55,17 +54,3 @@ class User(AbstractBaseUser):
     @property
     def phone(self):
         return self.phone_prefix + self.phone_number
-
-    def purge_expired_sessions(self):
-        self.sessions.filter(expires_at__lt=timezone.now()).delete()
-
-    def check_session(self, token):
-        self.purge_expired_sessions()
-        return self.sessions.filter(token=token, expires_at__gte=timezone.now()).exists()
-
-
-class Session(models.Model):
-    token = models.CharField(max_length=64, db_index=True)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="sessions")
-    expires_at = models.DateTimeField()
-

@@ -2,11 +2,6 @@
 UserCommandService and UserQueryService."""
 
 import re
-import uuid
-from datetime import timedelta
-
-from django.conf import settings
-from django.utils import timezone
 
 from banking.models import Account
 from common import ids
@@ -14,7 +9,7 @@ from common import validators as v
 from common.errors import AppError
 from common.validators import has_text
 
-from .models import Session, User
+from .models import User
 
 
 # ---------------------------------------------------------------- helpers
@@ -33,15 +28,6 @@ def user_response(user):
         "gender": user.gender,
         "admin": user.is_admin,
     }
-
-
-def _open_session(user):
-    user.purge_expired_sessions()
-    return Session.objects.create(
-        token=str(uuid.uuid4()),
-        user=user,
-        expires_at=timezone.now() + timedelta(seconds=settings.SESSION_TTL_SECONDS),
-    )
 
 
 def _split_phone(mobile):
@@ -130,7 +116,6 @@ def register(name, dni, email, phone, password, birthdate, gender, pin):
         raise _map_domain_error(exc) from None
 
     user.save()
-    session = _open_session(user)
 
     # Initial "Kofre" account. The original names the factory method
     # createWithZeroBalance but opens the account with 100.
@@ -143,67 +128,7 @@ def register(name, dni, email, phone, password, birthdate, gender, pin):
         iban=v.random_spanish_iban(),
         user_id=user.id,
     )
-    return {"message": "User registered successfully", "token": session.token}
-
-
-def login(dni, password):
-    if not has_text(dni) or not has_text(password):
-        raise AppError("INVALID_CREDENTIALS", "Credencials invàlides o incompletes")
-    user = find_by_dni(dni)
-    if user is None:
-        raise AppError("USER_NOT_FOUND", "Usuari inexistent")
-    if not user.check_password(password):
-        raise AppError("INVALID_CREDENTIALS", "Credencials invàlides")
-    if not user.is_active:
-        raise AppError("USER_DISABLED", "L'usuari està deshabilitat")
-    session = _open_session(user)
-    return {"token": session.token, "user": user_response(user)}
-
-
-def _validate_session_data(dni, token):
-    if dni is None and token is None:
-        raise AppError("MISSING_FIELDS", "Cal informar la sessió")
-    if not has_text(dni):
-        raise AppError("INVALID_DNI_FORMAT", "El DNI és obligatori")
-    if not has_text(token):
-        raise AppError("UNAUTHORIZED", "Token de sessió obligatori")
-
-
-def logout(dni, token):
-    _validate_session_data(dni, token)
-    user = find_by_dni(dni)
-    if user is None:
-        raise AppError("USER_NOT_FOUND", "Usuari inexistent")
-    if not user.check_session(token):
-        raise AppError("UNAUTHORIZED", "La sessió no és vàlida")
-    user.sessions.filter(token=token).delete()
-
-
-def find_by_session_token(token):
-    session = (
-        Session.objects.filter(token=token, expires_at__gte=timezone.now())
-        .select_related("user")
-        .first()
-    )
-    return session.user if session else None
-
-
-def validate(dni, token):
-    """Return the session's user or raise. Also used by the authentication class."""
-    if not has_text(dni):
-        if not has_text(token):
-            raise AppError("UNAUTHORIZED", "Token de sessió obligatori")
-        user = find_by_session_token(token)
-        if user is None:
-            raise AppError("UNAUTHORIZED", "Sessió no vàlida")
-        return user
-    _validate_session_data(dni, token)
-    user = find_by_dni(dni)
-    if user is None:
-        raise AppError("USER_NOT_FOUND", "Usuari inexistent")
-    if not user.check_session(token):
-        raise AppError("UNAUTHORIZED", "Sessió expirada o inexistent")
-    return user
+    return {"message": "User registered successfully"}
 
 
 def exists(dni):
