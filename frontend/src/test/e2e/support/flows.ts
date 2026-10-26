@@ -62,7 +62,7 @@ export async function logInThroughUi(page: Page, credentials: { dni: string; pas
 // Makes every API call from this page carry a bad token, to exercise the 401 path.
 // (Tokens live in memory only, so the test cannot overwrite them from storage.)
 export async function useInvalidAccessToken(page: Page) {
-    await page.route(`${API_BASE_URL}/**`, (route) =>
+    await page.route((url) => url.href.startsWith(`${API_BASE_URL}/`) || url.pathname.startsWith('/api/'), (route) =>
         route.fallback({
             headers: { ...route.request().headers(), authorization: 'Bearer invalid-token' },
         }),

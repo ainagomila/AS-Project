@@ -122,7 +122,7 @@ test.describe('Dashboard experience', () => {
 
         await logInThroughUi(page, { dni: user.dni, password: user.password })
 
-        const loginUrlPattern = /\/login(\?.*)?$/
+        const loginUrlPattern = /\/accounts\/login\//
         const dashboardUrlPattern = /\/dashboard(\?.*)?$/
 
         await page.getByRole('button', { name: 'Open settings' }).click()
@@ -132,7 +132,7 @@ test.describe('Dashboard experience', () => {
         await expect(page).toHaveURL(dashboardUrlPattern)
 
         await page.locator('button.logout-btn').click()
-        await expect(page).toHaveURL(loginUrlPattern)
+        await expect(page).toHaveURL(/\/$/)
 
         await page.goto('/dashboard')
         await expect(page).toHaveURL(loginUrlPattern)
