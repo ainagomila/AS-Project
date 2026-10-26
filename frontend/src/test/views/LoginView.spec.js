@@ -3,104 +3,74 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { createPinia } from 'pinia'
 import LoginView from '@/views/LoginView.vue'
+import ForgotPasswordModal from '@/components/modals/ForgotPasswordModal.vue'
 
 const mocks = vi.hoisted(() => ({
-  loginUser: vi.fn(),
-  userStore: {
-    login: vi.fn(),
-  },
+  signinRedirect: vi.fn(),
 }))
 
-const MOCK_TOKEN = '11111111-2222-3333-4444-555555555555'
-vi.mock('@/api/authService', () => ({
-  loginUser: mocks.loginUser,
-}))
+vi.mock('@/api/oidc', () => ({ userManager: { signinRedirect: mocks.signinRedirect } }))
+vi.mock('@/api/authService', () => ({ resetPassword: vi.fn() }))
+vi.mock('@/stores/user', () => ({ useUserStore: () => ({ logout: vi.fn() }) }))
 
-vi.mock('@/stores/user', () => ({
-  useUserStore: () => mocks.userStore,
-}))
-
-function createTestRouter() {
-  return createRouter({
+async function mountAt(path) {
+  const router = createRouter({
     history: createMemoryHistory(),
     routes: [
       { path: '/', name: 'home', component: { template: '<div />' } },
-      { path: '/dashboard', name: 'Dashboard', component: { template: '<div />' } },
+      { path: '/login', name: 'Login', component: LoginView },
     ],
   })
+  await router.push(path)
+  await router.isReady()
+
+  const wrapper = mount(LoginView, {
+    global: {
+      plugins: [router, createPinia()],
+      stubs: { RouterLink: RouterLinkStub },
+    },
+  })
+  await flushPromises()
+  return wrapper
 }
 
 describe('LoginView', () => {
   beforeEach(() => {
-    mocks.loginUser.mockReset()
-    mocks.userStore.login.mockReset()
+    mocks.signinRedirect.mockReset()
+    mocks.signinRedirect.mockResolvedValue()
   })
 
-  it('requires credentials before attempting login', async () => {
-    const router = createTestRouter()
-    await router.push('/')
-    await router.isReady()
+  it('starts the OAuth sign-in as soon as it opens', async () => {
+    await mountAt('/login')
 
-    const wrapper = mount(LoginView, {
-      global: {
-        plugins: [router, createPinia()],
-        stubs: { RouterLink: RouterLinkStub },
-      },
-    })
-
-    await wrapper.get('form').trigger('submit.prevent')
-
-    expect(mocks.loginUser).not.toHaveBeenCalled()
-    expect(globalThis.alert).toHaveBeenCalledWith('Please enter your credentials')
+    expect(mocks.signinRedirect).toHaveBeenCalledWith({ state: { redirect: '/dashboard' } })
   })
 
-  it('logs in and redirects on success', async () => {
-    const router = createTestRouter()
-    await router.push('/')
-    await router.isReady()
-    const pushSpy = vi.spyOn(router, 'push')
+  it('returns to the requested page after the sign-in', async () => {
+    await mountAt('/login?redirect=/profile')
 
-    mocks.loginUser.mockResolvedValue({ token: MOCK_TOKEN })
-
-    const wrapper = mount(LoginView, {
-      global: {
-        plugins: [router, createPinia()],
-        stubs: { RouterLink: RouterLinkStub },
-      },
-    })
-
-    await wrapper.findAll('input')[0].setValue(' 12345678A ')
-    await wrapper.findAll('input')[1].setValue('secret')
-
-    await wrapper.get('form').trigger('submit.prevent')
-    await flushPromises()
-
-    expect(mocks.loginUser).toHaveBeenCalledWith('12345678A', 'secret')
-    expect(mocks.userStore.login).toHaveBeenCalledWith('12345678A', { token: MOCK_TOKEN })
-    expect(pushSpy).toHaveBeenCalledWith('/dashboard')
-    expect(globalThis.alert).not.toHaveBeenCalled()
+    expect(mocks.signinRedirect).toHaveBeenCalledWith({ state: { redirect: '/profile' } })
   })
 
-  it('shows backend error messages when login fails', async () => {
-    const router = createTestRouter()
-    await router.push('/')
-    await router.isReady()
+  it('ignores redirects that leave the site', async () => {
+    await mountAt('/login?redirect=//evil.example')
 
-    mocks.loginUser.mockRejectedValue({ response: { data: { message: 'Invalid credentials' } } })
+    expect(mocks.signinRedirect).toHaveBeenCalledWith({ state: { redirect: '/dashboard' } })
+  })
 
-    const wrapper = mount(LoginView, {
-      global: {
-        plugins: [router, createPinia()],
-        stubs: { RouterLink: RouterLinkStub },
-      },
-    })
+  it('opens the reset modal instead of redirecting when forgot=1', async () => {
+    const wrapper = await mountAt('/login?forgot=1')
 
-    await wrapper.findAll('input')[0].setValue('12345678A')
-    await wrapper.findAll('input')[1].setValue('secret')
+    expect(mocks.signinRedirect).not.toHaveBeenCalled()
+    expect(wrapper.findComponent(ForgotPasswordModal).exists()).toBe(true)
+  })
 
-    await wrapper.get('form').trigger('submit.prevent')
-    await flushPromises()
+  it('alerts when the sign-in cannot start', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    mocks.signinRedirect.mockRejectedValue(new Error('offline'))
 
-    expect(globalThis.alert).toHaveBeenCalledWith('Invalid credentials')
+    await mountAt('/login')
+
+    expect(globalThis.alert).toHaveBeenCalledWith('Could not start the sign-in. Please try again.')
   })
 })

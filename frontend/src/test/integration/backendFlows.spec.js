@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest'
-import { signupUser, loginUser } from '@/api/authService'
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
+import { signupUser } from '@/api/authService'
+import { fetchAuthToken } from '../e2e/support/testData'
 import {
   addAccount,
   addCard,
@@ -12,6 +13,15 @@ import {
 } from '@/api/userService'
 
 vi.setConfig({ testTimeout: 60_000 })
+
+// Tokens live in the UserManager (memory only), which does not exist in node.
+// The access token comes from the real OAuth flow and is served through this stand-in.
+const auth = vi.hoisted(() => ({ token: null }))
+vi.mock('@/api/oidc', () => ({
+  userManager: {
+    getUser: async () => (auth.token ? { access_token: auth.token, expired: false } : null),
+  },
+}))
 
 const DNI_LETTERS = 'TRWAGMYFPDXBNJZSQVHLCKE'
 
@@ -115,14 +125,6 @@ describe.sequential('Real backend flows', () => {
     accounts: [],
   }
   let testUser
-  let authToken
-  const refreshAuthContext = () => {
-    if (!authToken) {
-      return
-    }
-    globalThis.localStorage.setItem('authToken', authToken)
-    globalThis.localStorage.setItem('userDni', testUser.dni)
-  }
 
   beforeAll(async () => {
     testUser = buildTestUser()
@@ -137,18 +139,11 @@ describe.sequential('Real backend flows', () => {
       pin: testUser.pin,
     })
 
-    const session = await loginUser(testUser.dni, testUser.password)
-    authToken = session?.token
-    expect(authToken).toBeTruthy()
-    refreshAuthContext()
-  })
-
-  beforeEach(() => {
-    refreshAuthContext()
+    auth.token = await fetchAuthToken(null, testUser.dni, testUser.password)
+    expect(auth.token).toBeTruthy()
   })
 
   afterAll(async () => {
-    refreshAuthContext()
     for (const card of [...cleanup.cards].reverse()) {
       try {
         await deleteCard(testUser.dni, card.iban, card.pan, testUser.pin)
@@ -171,7 +166,7 @@ describe.sequential('Real backend flows', () => {
       console.warn('Failed to delete test user during cleanup', error.message)
     }
 
-    globalThis.localStorage.clear()
+    auth.token = null
   })
 
   it('retrieves the profile of a freshly registered user', async () => {

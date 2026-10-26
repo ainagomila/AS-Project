@@ -1,5 +1,5 @@
 ﻿import { test, expect } from '@playwright/test'
-import { autoAcceptDialogs, completeSignupForm } from '../support/flows'
+import { autoAcceptDialogs, completeSignupForm, submitLoginForm } from '../support/flows'
 import { createCleanupManager } from '../support/cleanup'
 import { buildTestUser, registerUserViaApi } from '../support/testData'
 
@@ -26,6 +26,8 @@ test.describe('Signup guardrails', () => {
         await completeSignupForm(page, user)
         await page.getByTestId('signup-submit-btn').click()
 
+        await expect(page).toHaveURL(/\/accounts\/login\//)
+        await submitLoginForm(page, { dni: user.dni, password: user.password })
         await expect(page).toHaveURL(/\/dashboard$/)
         await expect(page.getByRole('heading', { name: 'Your Bank Accounts' })).toBeVisible()
     })

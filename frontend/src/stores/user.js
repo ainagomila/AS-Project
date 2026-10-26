@@ -34,9 +34,6 @@ export const useUserStore = defineStore('user', () => {
     isAuthenticated.value = false
   }
 
-  /** Nothing is persisted any more; kept so the views that call it keep working. */
-  function initFromStorage() {}
-
   return {
     dni,
     isAuthenticated,
@@ -50,6 +47,5 @@ export const useUserStore = defineStore('user', () => {
     isAdmin,
     login,
     logout,
-    initFromStorage,
   }
 })

@@ -1,6 +1,6 @@
 ﻿import { test, expect } from '@playwright/test'
 import type { APIRequestContext, Page } from '@playwright/test'
-import { autoAcceptDialogs, fillPinInputs, getFloatingField, logInThroughUi } from '../support/flows'
+import { autoAcceptDialogs, fillPinInputs, getFloatingField, logInThroughUi, useInvalidAccessToken } from '../support/flows'
 import { createCleanupManager } from '../support/cleanup'
 import { buildTestUser, registerUserViaApi } from '../support/testData'
 
@@ -78,7 +78,7 @@ test.describe('Profile PIN changes', () => {
 
         await newPinField.fill('987654')
         await confirmPinField.fill('987654')
-        await page.evaluate(() => window.localStorage.setItem('authToken', 'invalid-token'))
+        await useInvalidAccessToken(page)
 
         await page.getByRole('button', { name: 'Save changes' }).click()
         const pinModal = page.locator('.pin-modal', { hasText: 'Confirm changes' })

@@ -1,5 +1,5 @@
 ﻿import { test, expect } from '@playwright/test'
-import { autoAcceptDialogs, completeSignupForm } from './support/flows'
+import { autoAcceptDialogs, completeSignupForm, submitLoginForm } from './support/flows'
 import { createCleanupManager } from './support/cleanup'
 import { buildTestUser, registerUserViaApi } from './support/testData'
 
@@ -15,7 +15,7 @@ test.describe('Sign-up flow', () => {
     await cleanup.cleanup()
   })
 
-  test('completes registration for a new DNI and lands on the dashboard', async ({ page }) => {
+  test('completes registration, signs in and lands on the dashboard', async ({ page }) => {
     const user = buildTestUser()
     cleanup.registerUser({ dni: user.dni, pin: user.pin, password: user.password })
 
@@ -23,6 +23,8 @@ test.describe('Sign-up flow', () => {
     await completeSignupForm(page, user)
 
     await page.getByTestId('signup-submit-btn').click()
+    await expect(page).toHaveURL(/\/accounts\/login\//)
+    await submitLoginForm(page, { dni: user.dni, password: user.password })
     await expect(page).toHaveURL(/\/dashboard$/)
 
     await expect(page.getByRole('heading', { name: 'Your Bank Accounts' })).toBeVisible()

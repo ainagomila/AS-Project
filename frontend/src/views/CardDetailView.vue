@@ -362,7 +362,6 @@ onMounted(async () => {
     loading.value = true
     error.value = null
 
-    userStore.initFromStorage()
     if (!userStore.isAuthenticated || !userStore.dni) {
       router.push('/login')
       return
