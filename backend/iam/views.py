@@ -59,7 +59,7 @@ class UserDetailView(AuthenticatedView):
             prefix, number = services.split_update_phone(phone)
             result = services.update_phone(dni, pin, prefix, number)
         if has_text(password):
-            result = services.update_password(dni, pin, password)
+            result = services.update_password(dni, pin, password, keep_token=request.auth)
         if has_text(new_pin):
             result = services.update_pin(dni, pin, new_pin)
         if result is None:

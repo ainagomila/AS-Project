@@ -1,4 +1,5 @@
 import pytest
+from oauth2_provider.models import AccessToken
 
 from banking.models import Account
 from iam.models import User
@@ -74,4 +75,5 @@ def test_delete_user(ana):
     user_id = User.objects.get(dni=DNI_A).id
     assert ana.client.delete(ana.url(), {"pin": PIN}, format="json").status_code == 204
     assert not User.objects.filter(dni=DNI_A).exists()
+    assert not AccessToken.objects.filter(user_id=user_id).exists()
     assert Account.objects.filter(user_id=user_id).count() == 1

@@ -69,8 +69,8 @@ def test_disable_and_enable_user(admin, bob):
     disabled = admin.client.patch(f"/admin/users/{DNI_B}", {"active": False}, format="json")
     assert (disabled.status_code, disabled.json()["active"]) == (200, False)
 
-    existing_token = bob.client.get(bob.url())
-    assert (existing_token.status_code, existing_token.json()["code"]) == (403, "USER_DISABLED")
+    # Disabling ends the user's sessions: the old token is dead even after re-enabling.
+    assert bob.client.get(bob.url()).status_code == 401
 
     admin.client.patch(f"/admin/users/{DNI_B}", {"active": True}, format="json")
-    assert bob.client.get(bob.url()).status_code == 200
+    assert bob.client.get(bob.url()).status_code == 401

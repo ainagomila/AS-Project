@@ -7,7 +7,8 @@ from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = "django-insecure-kofre-local-development-key"
+# Signs the login session and CSRF cookies: set DJANGO_SECRET_KEY outside development.
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "django-insecure-kofre-local-development-key")
 DEBUG = True
 ALLOWED_HOSTS = ["*"]
 AUTH_USER_MODEL = "iam.User"

@@ -48,6 +48,8 @@ class AdminUserDetailView(AdminView):
             raise AppError("MISSING_FIELDS", "Cal informar 'active' (true o false)")
         user.is_active = active
         user.save()
+        if not active:
+            services.revoke_tokens(user)
         return Response(admin_user_response(user))
 
 

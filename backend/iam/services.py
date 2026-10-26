@@ -3,6 +3,8 @@ UserCommandService and UserQueryService."""
 
 import re
 
+from oauth2_provider.models import AccessToken, RefreshToken
+
 from banking.models import Account
 from common import ids
 from common import validators as v
@@ -28,6 +30,19 @@ def user_response(user):
         "gender": user.gender,
         "admin": user.is_admin,
     }
+
+
+def revoke_tokens(user, keep=None):
+    """End the user's OAuth sessions, except the `keep` access token if one is given."""
+    refresh_tokens = RefreshToken.objects.filter(user=user, revoked__isnull=True)
+    access_tokens = AccessToken.objects.filter(user=user)
+    if keep is not None:
+        refresh_tokens = refresh_tokens.exclude(access_token=keep)
+        access_tokens = access_tokens.exclude(pk=keep.pk)
+    for token in refresh_tokens:  # also revokes the refresh token's access token
+        token.revoke()
+    for token in access_tokens:
+        token.revoke()
 
 
 def _split_phone(mobile):
@@ -186,7 +201,7 @@ def update_phone(dni, pin, prefix, number):
     return user_response(user)
 
 
-def update_password(dni, pin, password):
+def update_password(dni, pin, password, keep_token=None):
     user = _user_with_pin(dni, pin)
     if not has_text(password):
         raise AppError("APPLICATION_ERROR", "Cal informar 'password' per actualitzar.")
@@ -200,6 +215,7 @@ def update_password(dni, pin, password):
     except ValueError as exc:
         raise AppError("INVALID_PASSWORD_FORMAT", str(exc)) from None
     user.save()
+    revoke_tokens(user, keep=keep_token)
     return user_response(user)
 
 

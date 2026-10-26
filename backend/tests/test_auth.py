@@ -2,7 +2,7 @@ from datetime import timedelta
 
 import pytest
 from django.utils import timezone
-from oauth2_provider.models import AccessToken
+from oauth2_provider.models import AccessToken, Application, RefreshToken
 
 from banking.models import Account
 from iam.models import User
@@ -79,3 +79,35 @@ def test_protected_routes_need_a_matching_live_token(client, ana, bob):
 
     AccessToken.objects.filter(token=ana.token).update(expires=timezone.now() - timedelta(seconds=1))
     assert ana.client.get(ana.url()).status_code == 401
+
+
+def _second_session(user_dni):
+    """Another signed-in device of the same user: an access token plus its refresh token."""
+    user = User.objects.get(dni=user_dni)
+    app = Application.objects.get(client_id="kofre-test-api")
+    access = AccessToken.objects.create(
+        user=user, application=app, token="other-device", scope="banking",
+        expires=timezone.now() + timedelta(minutes=5),
+    )
+    RefreshToken.objects.create(user=user, application=app, token="other-refresh", access_token=access)
+    return access
+
+
+def test_reset_password_revokes_every_session(client, ana):
+    other = _second_session(DNI_A)
+    body = {"dni": DNI_A, "pin": PIN, "newPassword": "Brand_New_1"}
+    assert client.post("/auth/reset-password", body, format="json").status_code == 204
+
+    assert ana.client.get(ana.url()).status_code == 401
+    assert not AccessToken.objects.filter(pk=other.pk).exists()
+    assert not RefreshToken.objects.filter(revoked__isnull=True).exists()
+
+
+def test_changing_the_password_keeps_only_the_current_session(ana):
+    other = _second_session(DNI_A)
+    changed = ana.client.patch(ana.url(), {"pin": PIN, "password": "Brand_New_1"}, format="json")
+    assert changed.status_code == 200
+
+    assert ana.client.get(ana.url()).status_code == 200
+    assert not AccessToken.objects.filter(pk=other.pk).exists()
+    assert not RefreshToken.objects.filter(token="other-refresh", revoked__isnull=True).exists()
