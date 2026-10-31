@@ -37,6 +37,8 @@ services:
     build:
       context: ./verifier-backend
     container_name: kofre_verifier
+    environment:
+      SECRET_KEY: ${VERIFIER_SECRET_KEY:?set VERIFIER_SECRET_KEY in .env}
     # No "ports": not published to the host. Only reachable by services on verifier_net.
     networks:
       - verifier_net

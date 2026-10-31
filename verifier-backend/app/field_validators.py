@@ -1,34 +1,36 @@
 import re
+from datetime import date
+
+PAN_RE = re.compile(r"[0-9]{13,19}")
+CVV_RE = re.compile(r"[0-9]{3}")
+DATE_RE = re.compile(r"(0[1-9]|1[0-2])/([0-9]{2})")
 
 
-def luhn_checksum(card_number: int) -> int:
-    def digits_of(n: int) -> list[int]:
-        return [int(d) for d in str(n)]
-    digits = digits_of(card_number)
-    odd_digits = digits[-1::-2]
-    even_digits = digits[-2::-2]
-    checksum = 0
-    checksum += sum(odd_digits)
-    for d in even_digits:
-        checksum += sum(digits_of(d*2))
-    return checksum % 10
+def is_luhn_valid(card_number: str) -> bool:
+    digits = [int(d) for d in reversed(card_number)]
+    total = sum(digits[0::2]) + sum(sum(divmod(d * 2, 10)) for d in digits[1::2])
+    return total % 10 == 0
 
-def is_luhn_valid(card_number: int) -> bool:
-    return luhn_checksum(card_number) == 0
 
 def is_valid_PAN(value: str) -> str:
-    is_valid_length = len(value) >= 13 and len(value) <= 18
-    if is_valid_length and value.isdigit() and is_luhn_valid(int(value)):
+    if PAN_RE.fullmatch(value) and is_luhn_valid(value):
         return value
-    raise ValueError("PAN not valid")
+    raise ValueError("Invalid PAN")
+
 
 def is_valid_CVV(value: str) -> str:
-    if len(value) == 3 and value.isdigit():
+    if CVV_RE.fullmatch(value):
         return value
     raise ValueError("Invalid CVV")
 
+
 def is_valid_date(value: str) -> str:
-    MM_YY = re.compile(r'(0[1-9]|1[0-2])/[0-9]{2}')
-    if MM_YY.fullmatch(value) is not None:
-        return value
-    raise ValueError("Invalid expiration date")
+    """Accepts MM/YY; the card is valid through the end of that month."""
+    match = DATE_RE.fullmatch(value)
+    if match is None:
+        raise ValueError("Invalid expiration date")
+    month, year = int(match[1]), 2000 + int(match[2])
+    today = date.today()
+    if (year, month) < (today.year, today.month):
+        raise ValueError("Card expired")
+    return value
