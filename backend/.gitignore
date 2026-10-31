@@ -5,3 +5,4 @@ db.sqlite3
 .env
 .env.d/
 .pytest_cache/
+.certs/
