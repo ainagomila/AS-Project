@@ -29,7 +29,7 @@ def _resolve_user_account(dni, iban, pin=None, with_pin=False):
     if with_pin:
         if not has_text(pin):
             raise AppError("INVALID_PIN_FORMAT", "El PIN és obligatori!")
-        if user.pin != pin:
+        if not user.check_pin(pin):
             raise AppError("INVALID_PIN", "El PIN és incorrecte!")
     account = find_by_iban(iban)
     if account is None:

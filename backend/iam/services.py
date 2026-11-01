@@ -78,7 +78,7 @@ def _require_pin(dni, pin):
     user = find_by_dni(dni)
     if user is None:
         raise AppError("USER_NOT_FOUND", "L'usuari no existeix")
-    if user.pin != pin:
+    if not user.check_pin(pin):
         raise AppError("INVALID_PIN", "El PIN és incorrecte!")
     return user
 
@@ -121,7 +121,7 @@ def register(name, dni, email, phone, password, birthdate, gender, pin):
         user = User(id=ids.generate("USER"), name=name)
         #user.password = v.validate_password(password) -> changed!!!!
         user.set_password(v.validate_password(password))
-        user.pin = v.validate_user_pin(pin)
+        user.set_pin(v.validate_user_pin(pin))
         user.dni = v.validate_dni(dni)
         user.phone_prefix, user.phone_number = prefix, number
         user.email = v.validate_email(email)
@@ -223,9 +223,9 @@ def update_pin(dni, pin, new_pin):
     user = _user_with_pin(dni, pin)
     if not has_text(new_pin):
         raise AppError("APPLICATION_ERROR", "Cal informar 'pin' per actualitzar.")
-    if new_pin != user.pin:
+    if not user.check_pin(new_pin):
         try:
-            user.pin = v.validate_user_pin(new_pin)
+            user.set_pin(v.validate_user_pin(new_pin))
         except ValueError as exc:
             raise AppError("INVALID_PIN_FORMAT", str(exc)) from None
     user.save()
@@ -238,7 +238,8 @@ def delete_user(dni, pin):
     _require_pin(dni, pin).delete()
 
 def verify_pin(dni, pin):
-    return {"pin": _user_with_pin(dni, pin).pin}
+    _user_with_pin(dni, pin)
+    return {"verified": True}
 
 
 def verify_password(dni, pin):
