@@ -26,7 +26,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import { Clock } from 'lucide-vue-next'
+import { Clock } from '@lucide/vue'
 
 const props = defineProps({
   seconds: { type: Number, required: true },

@@ -85,9 +85,6 @@ export default defineConfig({
 
   test: {
     environment: 'jsdom',
-    environmentMatchGlobs: [
-      ['src/test/integration/**', 'node'],
-    ],
     globals: true,
     setupFiles: ['./src/test/setup.js'],
     exclude: [

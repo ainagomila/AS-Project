@@ -299,7 +299,7 @@ import {
   Lock,
   Shield,
   AlertTriangle,
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import { ref, computed, nextTick, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import HeaderLayout from '@/components/layout/HeaderLayout.vue'

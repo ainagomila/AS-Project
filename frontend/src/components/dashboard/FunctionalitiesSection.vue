@@ -18,7 +18,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import { ShieldCheck, UserRound } from 'lucide-vue-next'
+import { ShieldCheck, UserRound } from '@lucide/vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 

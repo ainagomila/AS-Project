@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { signupUser } from '@/api/authService'
 import { fetchAuthToken } from '../e2e/support/testData'

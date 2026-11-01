@@ -337,7 +337,7 @@ import HeaderLayout from '@/components/layout/HeaderLayout.vue'
 import FooterLayout from '@/components/layout/FooterLayout.vue'
 import { ref, nextTick, onMounted, onUnmounted, computed } from 'vue'
 import { useUserStore } from '@/stores/user'
-import { Eye, EyeOff, Lock, Shield } from 'lucide-vue-next'
+import { Eye, EyeOff, Lock, Shield } from '@lucide/vue'
 import {
   getUser,
   updateUser,
