@@ -49,7 +49,7 @@ async function login() {
   try {
     await userManager.signinRedirect({ state: { redirect: safeRedirect(route.query.redirect) } })
   } catch (error) {
-    console.error('Login error:', error)
+    console.error('Login error:', error?.message)
     alert('Could not start the sign-in. Please try again.')
   }
 }
@@ -90,14 +90,14 @@ async function handleForgotSubmit(payload) {
     alert('Password updated. Please log in with your new password.')
     await login()
   } catch (error) {
-    console.error('Error resetting password', error)
+    console.error('Error resetting password', error?.message)
 
     const status = error?.response?.status
 
-    if (status === 404) {
-      alert('User not found.')
+    if (status === 429) {
+      alert('Too many attempts. Try again later.')
     } else if (status === 400 || status === 401 || status === 403 || status === 422) {
-      alert('The PIN is incorrect.')
+      alert('The DNI or PIN is incorrect.')
     } else {
       alert('Unexpected error while resetting password.')
     }

@@ -6,14 +6,12 @@ import SignupView from '@/views/SignupView.vue'
 
 const mocks = vi.hoisted(() => ({
   signupUser: vi.fn(),
-  checkUserExists: vi.fn(),
   signinRedirect: vi.fn(),
 }))
 
 vi.mock('@/api/oidc', () => ({ userManager: { signinRedirect: mocks.signinRedirect } }))
 vi.mock('@/api/authService', () => ({
   signupUser: mocks.signupUser,
-  checkUserExists: mocks.checkUserExists,
 }))
 
 function createTestRouter() {
@@ -49,7 +47,6 @@ describe('SignupView', () => {
   beforeEach(() => {
     globalThis.alert.mockClear()
     mocks.signupUser.mockReset()
-    mocks.checkUserExists.mockReset()
     mocks.signinRedirect.mockReset()
   })
 
@@ -67,40 +64,7 @@ describe('SignupView', () => {
     expect(mocks.signupUser).not.toHaveBeenCalled()
   })
 
-  it('stops registration when the user already exists', async () => {
-    mocks.checkUserExists.mockImplementation(async (value) => value === '12345678Z')
-    vi.useFakeTimers()
-    try {
-      const { wrapper } = await mountSignupView()
-
-      await wrapper.get('#name').setValue('Ada Lovelace')
-      await wrapper.get('#dni').setValue('12345678Z')
-      await wrapper.get('#email').setValue('ada@example.com')
-      await wrapper.get('#phone').setValue('+34600111222')
-      await wrapper.get('#password').setValue('Secret12!')
-      await wrapper.get('#confirmPassword').setValue('Secret12!')
-      await wrapper.get('#pin').setValue('123456')
-      await wrapper.get('#birthday').setValue('01/02/1990')
-      await wrapper.get('select').setValue('female')
-      await wrapper.get('#terms').setValue(true)
-
-      vi.runAllTimers()
-      await flushPromises()
-
-      await wrapper.get('form').trigger('submit.prevent')
-      await flushPromises()
-
-      expect(mocks.checkUserExists).toHaveBeenCalledWith('12345678Z')
-      expect(wrapper.text()).toContain('This DNI is already registered.')
-      expect(mocks.signupUser).not.toHaveBeenCalled()
-      expect(globalThis.alert).toHaveBeenCalledWith('Please fix the errors.')
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('registers new users and starts the OAuth sign-in', async () => {
-    mocks.checkUserExists.mockImplementation(async () => false)
     mocks.signupUser.mockResolvedValue({ message: 'created' })
     vi.useFakeTimers()
     try {

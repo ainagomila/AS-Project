@@ -3,6 +3,7 @@ UserCommandService and UserQueryService."""
 
 import re
 
+from django.db.models import Q
 from oauth2_provider.models import AccessToken, RefreshToken
 
 from banking.models import Account
@@ -76,20 +77,20 @@ def _require_pin(dni, pin):
     if not has_text(pin):
         raise AppError("INVALID_PIN_FORMAT", "El PIN és obligatori")
     user = find_by_dni(dni)
-    if user is None:
-        raise AppError("USER_NOT_FOUND", "L'usuari no existeix")
-    if not user.check_pin(pin):
+    # An unknown DNI gets the wrong-PIN answer: the public reset-password must not reveal users.
+    if user is None or not user.check_pin(pin):
         raise AppError("INVALID_PIN", "El PIN és incorrecte!")
     return user
 
 
 def _user_with_pin(dni, pin):
-    if find_by_dni(dni) is None:
-        raise AppError("USER_NOT_FOUND", "Usuari inexistent")
     return _require_pin(dni, pin)
 
 
 # ---------------------------------------------------------------- auth
+
+REGISTERED = {"message": "Registration received. Log in to continue."}
+
 
 def register(name, dni, email, phone, password, birthdate, gender, pin):
     required = [
@@ -106,16 +107,11 @@ def register(name, dni, email, phone, password, birthdate, gender, pin):
         if not has_text(value):
             raise AppError(code, message)
 
-    if find_by_dni(dni) is not None:
-        raise AppError("USER_ALREADY_EXISTS", "Ja existeix un usuari amb el DNI indicat")
-
     try:
         prefix, number = _split_phone(phone)
         prefix, number = v.validate_phone(prefix, number)
     except ValueError as exc:
         raise AppError("INVALID_PHONE_FORMAT", str(exc)) from None
-    if User.objects.phone_exists(prefix, number):
-        raise AppError("USER_ALREADY_EXISTS", "Ja existeix un usuari amb el telèfon indicat")
 
     try:
         user = User(id=ids.generate("USER"), name=name)
@@ -130,6 +126,13 @@ def register(name, dni, email, phone, password, birthdate, gender, pin):
     except ValueError as exc:
         raise _map_domain_error(exc) from None
 
+    # A taken DNI or phone gets the same answer as a new user (after the same password
+    # and PIN hashing), so registration cannot be used to find out who is a customer.
+    taken = User.objects.filter(
+        Q(dni_index=user.dni_index) | Q(phone_index=user.phone_index)
+    ).exists()
+    if taken:
+        return REGISTERED
     user.save()
 
     # Initial "Kofre" account. The original names the factory method
@@ -143,12 +146,7 @@ def register(name, dni, email, phone, password, birthdate, gender, pin):
         iban=v.random_spanish_iban(),
         user_id=user.id,
     )
-    return {"message": "User registered successfully"}
-
-
-def exists(dni):
-    if not has_text(dni) or find_by_dni(dni.strip()) is None:
-        raise AppError("USER_NOT_FOUND", "L'usuari no existeix al sistema")
+    return REGISTERED
 
 
 # ---------------------------------------------------------------- users

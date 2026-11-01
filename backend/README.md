@@ -9,6 +9,7 @@ Requires [uv](https://docs.astral.sh/uv/) and Python 3.13.
 ```sh
 cd backend
 uv sync
+export DJANGO_DEBUG=1   # development defaults; otherwise see .env.example
 uv run python manage.py generate_key   # writes .env.d/encryptionKey64.json
 uv run python manage.py migrate
 # Debian/Ubuntu only: needed for Firefox to trust the local certificate
@@ -24,6 +25,15 @@ expects that port.
 
 The field-encryption key can also be given as `SECURITY_ENCRYPTION_KEY_BASE64`
 (32 random bytes, base64). See `.env.example`.
+
+With `DJANGO_DEBUG` off (the default) `DJANGO_SECRET_KEY` and `POSTGRES_PASSWORD`
+are required; only debug mode and the test suite fall back to development values.
+A production-like configuration passes `check --deploy`:
+
+```sh
+DJANGO_SECRET_KEY="$(openssl rand -base64 48)" POSTGRES_PASSWORD=x \
+  DJANGO_ALLOWED_HOSTS=localhost uv run python manage.py check --deploy
+```
 
 DNI, email, phone number, PAN and card PIN are stored as AES-256-GCM
 `v1:<key id>:<nonce>:<ciphertext>`, bound to `<table>.<column>.<row id>` as
@@ -44,8 +54,10 @@ uv run python manage.py create_admin <dni>
 ## Tests
 
 ```sh
-uv run pytest
+POSTGRES_HOST=127.0.0.1 POSTGRES_PORT=5432 uv run pytest
 ```
+
+No secrets are needed: the test suite uses the development defaults.
 
 ## Layout
 

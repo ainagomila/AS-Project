@@ -1,5 +1,7 @@
 # AS-Project
 
+[![CI](https://github.com/ainagomila/AS-Project/actions/workflows/ci.yml/badge.svg)](https://github.com/ainagomila/AS-Project/actions/workflows/ci.yml)
+
 Kofre: a small online banking web application used as the Application Security
 course project. This repository holds the **vulnerable baseline**: a Django port
 of an earlier Spring Boot backend, cut down to registration and login, accounts,
@@ -33,6 +35,19 @@ when it is missing, run `mkcert -install`, create the certificate on the host,
 copy mkcert's root certificate (`rootCA.pem`) next to it, and then start Docker
 Compose. The package manager may ask for administrator approval.
 
+The scripts also generate the secrets Docker Compose needs into a gitignored
+`.env` at the repository root: `VERIFIER_SECRET_KEY`, `DJANGO_SECRET_KEY` and
+`POSTGRES_PASSWORD`. The database password used to be fixed, so if you already
+have a Kofre database volume, run `docker compose down -v` once (this erases the
+local data). The backend runs with `DEBUG` off; set `DJANGO_DEBUG=1` in `.env`
+for Django's debug pages.
+
+The backend and frontend containers run as an unprivileged user whose UID must be
+able to read the bind-mounted certificate and keys in `backend/.certs`. With
+Docker, `start-docker.sh` builds that user with your UID (`KOFRE_UID`, default
+1000). With rootless Podman it adds `docker-compose.podman.yml`, which maps your
+user to UID 1000 instead.
+
 `rootCA.pem` is what lets the frontend's dev proxy verify the backend's
 certificate. When the backend container starts it also generates the OIDC signing
 key (if missing), applies the migrations and creates the OAuth client `kofre-web`,
@@ -47,6 +62,7 @@ Backend (needs [uv](https://docs.astral.sh/uv/) and Python 3.13):
 ```sh
 cd backend
 uv sync
+export DJANGO_DEBUG=1   # or set DJANGO_SECRET_KEY and POSTGRES_PASSWORD
 uv run python manage.py generate_key
 mkdir -p .env.d && openssl genrsa -out .env.d/oidc.key 2048
 mkcert -install
@@ -62,6 +78,8 @@ In PowerShell the copy is
 `Copy-Item (Join-Path (mkcert -CAROOT) "rootCA.pem") .certs\rootCA.pem`.
 Never copy `rootCA-key.pem`. If your Vue app is not served from
 `https://localhost:5173`, set `FRONTEND_URL` before running `create_oauth_client`.
+The database is read from `POSTGRES_HOST` (default `db`), `POSTGRES_PORT`,
+`POSTGRES_DB`, `POSTGRES_USER` and `POSTGRES_PASSWORD`; see `backend/.env.example`.
 
 Frontend (needs Node 20.19+ or 22.12+):
 
@@ -85,7 +103,8 @@ in memory only, so reloading the page signs you in again through the backend.
 
 Sessions last 5 minutes: a minute before expiry the app offers to extend (5 more
 minutes) and otherwise signs out through `/o/logout/`, which revokes the tokens.
-Outside development set `DJANGO_SECRET_KEY`. Details are in section 7 of the
+Without `DJANGO_DEBUG=1` the backend refuses to start unless `DJANGO_SECRET_KEY`
+and `POSTGRES_PASSWORD` are set. Details are in sections 7 and 8 of the
 [inventory](docs/vulnerability-inventory.md).
 
 To get an administrator, register a user in the app and run
@@ -146,6 +165,11 @@ The frontend integration and browser tests talk to a running backend on
 `https://localhost:8080` and leave their test users in its database. They sign in
 through OAuth, so run them with `E2E_BASE_URL=https://localhost:5173`
 (`npm run test:e2e:local` does it).
+
+CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs on every push to
+`main` and every pull request: backend tests against Postgres, frontend lint and
+unit tests (Node 22), and the security scanner (`docker-compose.security.yml`),
+which fails on CRITICAL or HIGH findings.
 
 ## Docs
 

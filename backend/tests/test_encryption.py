@@ -63,7 +63,7 @@ def test_lookup_by_dni_and_pan_is_normalised(ana, card):
 
 def test_dni_differing_only_in_case_is_a_duplicate(client, ana):
     again = client.post("/auth/register", register_payload(dni=DNI_A.lower(), phone="+34611111111"), format="json")
-    assert (again.status_code, again.json()["code"]) == (409, "USER_ALREADY_EXISTS")
+    assert again.status_code == 201  # same answer as a new user (A6), but nothing is created
     assert User.objects.count() == 1
 
 

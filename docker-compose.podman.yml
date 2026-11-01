@@ -1,0 +1,10 @@
+# Rootless Podman maps the host user to root inside the container, so the images'
+# non-root user (UID 1000) could not read the bind-mounted certificates and keys.
+# This maps the host user to UID 1000 instead. The start scripts add this file
+# when `docker` is Podman:
+#   docker compose -f docker-compose.yaml -f docker-compose.podman.yml up --build
+services:
+  backend:
+    userns_mode: "keep-id:uid=1000,gid=1000"
+  frontend:
+    userns_mode: "keep-id:uid=1000,gid=1000"
