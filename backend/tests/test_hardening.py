@@ -6,6 +6,8 @@ from pathlib import Path
 import pytest
 from django.test import Client
 
+from banking.models import Account, Card
+
 from .conftest import DNI_A, PASSWORD, PIN
 
 pytestmark = pytest.mark.django_db
@@ -96,6 +98,10 @@ def test_reset_password_locks_out_per_dni(client, ana):
 def test_wrong_pins_on_any_endpoint_lock_verify_card(ana):
     _fail_pin(ana.client, ana.url("/security/verify-pin"), times=4)
     iban = ana.iban()
+    Card.objects.create(
+        id="CARD-1", pan="4111111111111111", expire_date="2029-05-31", alias="x", bank="Kofre",
+        type="DEBIT", status="ACTIVE", pin="", account_id=Account.objects.get(iban=iban).id,
+    )  # the policy hides a card that does not exist before the PIN is even checked
     url = ana.url(f"/accounts/{iban}/cards/4111111111111111/security/verify-card")
     assert ana.client.post(url, {"pin": "000000"}, format="json").status_code == 422
     assert ana.client.post(url, {"pin": PIN}, format="json").status_code == 429

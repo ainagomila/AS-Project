@@ -1,8 +1,9 @@
 import apiClient from './apiClient'
 
 /* ====================================
-   ADMIN
-   Solo usuarios con rol administrador
+   BACK OFFICE (administradores y auditores)
+   Users and accounts are addressed by internal ids, never by DNI or IBAN.
+   What each role may call is decided by the backend's XACML policy.
 ==================================== */
 
 export async function getAllUsers() {
@@ -10,19 +11,24 @@ export async function getAllUsers() {
   return Array.isArray(data) ? data : []
 }
 
-export async function setUserActive(dni, active) {
-  const { data } = await apiClient.patch(`/admin/users/${encodeURIComponent(dni)}`, { active })
+export async function setUserActive(userId, active) {
+  const { data } = await apiClient.patch(`/admin/users/${encodeURIComponent(userId)}`, { active })
   return data
 }
 
-export async function getUserAccounts(dni) {
-  const { data } = await apiClient.get(`/admin/users/${encodeURIComponent(dni)}/accounts`)
+export async function getUserAccounts(userId) {
+  const { data } = await apiClient.get(`/admin/users/${encodeURIComponent(userId)}/accounts`)
   return data?.accounts ?? []
 }
 
-export async function getAccountTransfers(dni, iban) {
+export async function getAccountTransfers(userId, accountId) {
   const { data } = await apiClient.get(
-    `/admin/users/${encodeURIComponent(dni)}/accounts/${encodeURIComponent(iban)}/transfers`,
+    `/admin/users/${encodeURIComponent(userId)}/accounts/${encodeURIComponent(accountId)}/transfers`,
   )
   return data?.transfers ?? []
+}
+
+export async function getAuditLog() {
+  const { data } = await apiClient.get('/admin/audit')
+  return data?.events ?? []
 }

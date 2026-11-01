@@ -115,9 +115,12 @@ def test_delete_card(ana, card):
 
 def test_card_on_another_users_account(ana, bob, card):
     other = ana.client.post(ana.url(f"/accounts/{bob.iban()}/cards"), {**NEW, "pan": "5500000000000004"}, format="json")
-    assert (other.status_code, other.json()["code"]) == (403, "UNAUTHORIZED")
+    assert (other.status_code, other.json()["code"]) == (404, "ACCOUNT_NOT_FOUND")
+    # A real card reached through the wrong account answers like a missing card.
     wrong_account = bob.client.get(bob.url(f"/accounts/{bob.iban()}/cards/{PAN}"))
-    assert (wrong_account.status_code, wrong_account.json()["code"]) == (403, "UNAUTHORIZED")
+    missing = bob.client.get(bob.url(f"/accounts/{bob.iban()}/cards/5500000000000004"))
+    assert (wrong_account.status_code, wrong_account.json()) == (missing.status_code, missing.json())
+    assert (wrong_account.status_code, wrong_account.json()["code"]) == (404, "CARD_NOT_FOUND")
 
 
 def test_wrong_cvv_is_rejected_by_the_verifier(ana):

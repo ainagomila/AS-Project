@@ -18,9 +18,9 @@
         <slot name="right">
           <!-- SOLO SE MUESTRAN SI NO ESTAMOS EN LOGIN / SIGNUP / TERMS -->
           <div v-if="!hideIcons" class="header-buttons">
-            <!-- ADMIN (solo administradores) -->
+            <!-- BACK OFFICE (administradores y auditores) -->
             <button
-              v-if="userStore.isAdmin"
+              v-if="userStore.isStaff"
               class="icon-btn"
               @click="goToAdmin"
               aria-label="Open admin"

@@ -7,6 +7,15 @@
     <main class="scroll-content">
       <section class="admin-section">
         <h2 class="admin-title">Users</h2>
+        <p class="admin-note" data-testid="admin-role-note">
+          <template v-if="userStore.isAuditor">
+            Auditor view: personal data is pseudonymised and nothing can be changed.
+          </template>
+          <template v-else>
+            Administrator view: you can enable or disable customers. Balances and transfers are only
+            visible to auditors.
+          </template>
+        </p>
         <p v-if="error" class="admin-error" data-testid="admin-error">{{ error }}</p>
 
         <table class="admin-table" data-testid="admin-users">
@@ -18,26 +27,27 @@
               <th>Phone</th>
               <th>Role</th>
               <th>Status</th>
-              <th></th>
+              <th v-if="userStore.isAdmin"></th>
             </tr>
           </thead>
           <tbody>
             <tr
               v-for="user in users"
-              :key="user.dni"
-              :class="{ selected: selectedUser?.dni === user.dni }"
+              :key="user.id"
+              :class="{ selected: selectedUser?.id === user.id, clickable: userStore.isAuditor }"
               @click="selectUser(user)"
             >
               <td>{{ user.dni }}</td>
               <td>{{ user.name }}</td>
               <td>{{ user.email }}</td>
               <td>{{ user.phone }}</td>
-              <td>{{ user.admin ? 'Admin' : 'User' }}</td>
+              <td>{{ roleLabel(user.role) }}</td>
               <td>{{ user.active ? 'Active' : 'Disabled' }}</td>
-              <td>
+              <td v-if="userStore.isAdmin">
                 <button
                   class="admin-btn"
-                  :disabled="user.dni === userStore.dni"
+                  :disabled="user.role !== 'customer'"
+                  :title="user.role !== 'customer' ? 'Staff accounts cannot be disabled' : ''"
                   @click.stop="toggleActive(user)"
                 >
                   {{ user.active ? 'Disable' : 'Enable' }}
@@ -63,8 +73,8 @@
           <tbody>
             <tr
               v-for="account in accounts"
-              :key="account.iban"
-              :class="{ selected: selectedAccount?.iban === account.iban }"
+              :key="account.id"
+              :class="{ selected: selectedAccount?.id === account.id, clickable: true }"
               @click="selectAccount(account)"
             >
               <td>{{ account.iban }}</td>
@@ -96,6 +106,35 @@
           </tbody>
         </table>
       </section>
+
+      <section v-if="userStore.isAuditor" class="admin-section">
+        <h2 class="admin-title">Audit trail</h2>
+        <p v-if="!events.length" class="admin-empty">No events.</p>
+        <table v-else class="admin-table" data-testid="admin-audit">
+          <thead>
+            <tr>
+              <th>When</th>
+              <th>Who</th>
+              <th>Action</th>
+              <th>Resource</th>
+              <th>Decision</th>
+              <th>Rule</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(event, index) in events" :key="index">
+              <td>{{ formatDate(event.at) }}</td>
+              <td>{{ event.subjectRole }} {{ shortId(event.subjectId) }}</td>
+              <td>{{ event.action }}</td>
+              <td>{{ event.resourceType }} {{ shortId(event.resourceId) }}</td>
+              <td :class="event.decision === 'Permit' ? 'permit' : 'deny'">{{ event.decision }}</td>
+              <td>{{ event.rule.replace('urn:kofre:rule:', '') }}</td>
+              <td>{{ event.status }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
     </main>
   </div>
 </template>
@@ -109,6 +148,7 @@ import {
   setUserActive,
   getUserAccounts,
   getAccountTransfers,
+  getAuditLog,
 } from '@/api/adminService.js'
 
 const userStore = useUserStore()
@@ -116,9 +156,20 @@ const userStore = useUserStore()
 const users = ref([])
 const accounts = ref([])
 const transfers = ref([])
+const events = ref([])
 const selectedUser = ref(null)
 const selectedAccount = ref(null)
 const error = ref('')
+
+const ROLE_LABELS = { customer: 'Customer', admin: 'Admin', auditor: 'Auditor' }
+
+function roleLabel(role) {
+  return ROLE_LABELS[role] ?? role
+}
+
+function shortId(id) {
+  return id ? `…${id.slice(-6)}` : ''
+}
 
 function describe(e) {
   return e.response?.data?.message || e.message || 'Unexpected error'
@@ -129,20 +180,28 @@ async function loadUsers() {
   try {
     users.value = await getAllUsers()
   } catch (e) {
-    console.error('Failed to load users:', e)
     error.value = describe(e)
   }
 }
 
+async function loadAudit() {
+  try {
+    events.value = await getAuditLog()
+  } catch (e) {
+    error.value = describe(e)
+  }
+}
+
+// Only auditors can follow the money; for administrators the policy denies it.
 async function selectUser(user) {
+  if (!userStore.isAuditor) return
   selectedUser.value = user
   selectedAccount.value = null
   transfers.value = []
   error.value = ''
   try {
-    accounts.value = await getUserAccounts(user.dni)
+    accounts.value = await getUserAccounts(user.id)
   } catch (e) {
-    console.error('Failed to load accounts:', e)
     accounts.value = []
     error.value = describe(e)
   }
@@ -152,9 +211,8 @@ async function selectAccount(account) {
   selectedAccount.value = account
   error.value = ''
   try {
-    transfers.value = await getAccountTransfers(selectedUser.value.dni, account.iban)
+    transfers.value = await getAccountTransfers(selectedUser.value.id, account.id)
   } catch (e) {
-    console.error('Failed to load transfers:', e)
     transfers.value = []
     error.value = describe(e)
   }
@@ -163,10 +221,9 @@ async function selectAccount(account) {
 async function toggleActive(user) {
   error.value = ''
   try {
-    const updated = await setUserActive(user.dni, !user.active)
+    const updated = await setUserActive(user.id, !user.active)
     user.active = updated.active
   } catch (e) {
-    console.error('Failed to update user:', e)
     error.value = describe(e)
   }
 }
@@ -179,7 +236,10 @@ function formatDate(value) {
   return value ? new Date(value).toLocaleString() : ''
 }
 
-onMounted(loadUsers)
+onMounted(async () => {
+  await loadUsers()
+  if (userStore.isAuditor) await loadAudit()
+})
 </script>
 
 <style scoped>
@@ -232,11 +292,11 @@ onMounted(loadUsers)
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.admin-table tbody tr {
+.admin-table tbody tr.clickable {
   cursor: pointer;
 }
 
-.admin-table tbody tr:hover,
+.admin-table tbody tr.clickable:hover,
 .admin-table tbody tr.selected {
   background: rgba(255, 255, 255, 0.08);
 }
@@ -262,5 +322,19 @@ onMounted(loadUsers)
 
 .admin-empty {
   opacity: 0.7;
+}
+
+.admin-note {
+  margin: 0 0 12px;
+  opacity: 0.75;
+  font-size: 0.9rem;
+}
+
+.permit {
+  color: #9be29b;
+}
+
+.deny {
+  color: #ff8a80;
 }
 </style>

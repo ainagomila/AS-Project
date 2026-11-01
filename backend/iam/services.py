@@ -3,16 +3,17 @@ UserCommandService and UserQueryService."""
 
 import re
 
+from django.db import transaction
 from django.db.models import Q
 from oauth2_provider.models import AccessToken, RefreshToken
 
-from banking.models import Account
+from banking.models import Account, Card
 from common import ids
 from common import validators as v
 from common.errors import AppError
 from common.validators import has_text
 
-from .models import User
+from .models import ADMIN, User
 
 
 # ---------------------------------------------------------------- helpers
@@ -29,7 +30,8 @@ def user_response(user):
         "phone": user.phone,
         "birthdate": user.birthdate.isoformat(),
         "gender": user.gender,
-        "admin": user.is_admin,
+        "role": user.role,
+        "admin": user.role == ADMIN,
     }
 
 
@@ -231,9 +233,17 @@ def update_pin(dni, pin, new_pin):
 
 
 def delete_user(dni, pin):
-    # Only the user (and their sessions) is removed. Accounts, cards and
-    # payments are left behind, as in the original.
-    _require_pin(dni, pin).delete()
+    """Erase the user with their sessions, accounts and cards.
+
+    Payments are kept: each one is also the other party's history, and they
+    refer only to IBANs, not to the person.
+    """
+    user = _require_pin(dni, pin)
+    with transaction.atomic():
+        account_ids = list(Account.objects.filter(user_id=user.id).values_list("id", flat=True))
+        Card.objects.filter(account_id__in=account_ids).delete()
+        Account.objects.filter(id__in=account_ids).delete()
+        user.delete()
 
 def verify_pin(dni, pin):
     _user_with_pin(dni, pin)

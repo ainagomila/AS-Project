@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     "iam",
     "banking",
     "payments",
+    "authz",
     "oauth2_provider",
 ]
 
