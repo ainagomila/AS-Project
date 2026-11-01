@@ -212,7 +212,7 @@
 <script setup lang="ts">
   import HeaderLayout from '@/components/layout/HeaderLayout.vue'
   import { ref, computed } from 'vue'
-  import { signupUser, checkUserExists } from '@/api/authService'
+  import { signupUser } from '@/api/authService'
   import { userManager } from '@/api/oidc'
   import { Eye, EyeOff } from 'lucide-vue-next'
 
@@ -295,8 +295,6 @@
     nameError.value = form.value.name.length < 2 ? 'Please enter a valid name.' : ''
   }
 
-  let dniTimeout: any
-
   const validateDni = () => {
     const dni = form.value.dni
     const dniRegex = /^\d{8}[A-Za-z]$/
@@ -312,12 +310,6 @@
     }
 
     dniError.value = ''
-
-    clearTimeout(dniTimeout)
-    dniTimeout = setTimeout(async () => {
-      const exists = await checkUserExists(dni)
-      if (exists) dniError.value = 'This DNI is already registered.'
-    }, 500)
   }
 
   function validateRealDni(dni: string) {
@@ -332,8 +324,6 @@
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     emailError.value = emailRegex.test(form.value.email) ? '' : 'Invalid email.'
   }
-
-  let phoneTimeout: any
 
   const validatePhone = () => {
     let value = form.value.phone
@@ -370,12 +360,6 @@
     }
 
     phoneError.value = ''
-
-    clearTimeout(phoneTimeout)
-    phoneTimeout = setTimeout(async () => {
-      const exists = await checkUserExists('+34' + digits)
-      if (exists) phoneError.value = 'This phone number is already registered.'
-    }, 500)
   }
 
   const validatePassword = () => {
@@ -488,9 +472,6 @@
       const normalizedPhone = normalizePhone(form.value.phone)
       if (!normalizedPhone) return alert('Invalid phone.')
 
-      const exists = await checkUserExists(form.value.dni)
-      if (exists) return alert('This DNI is already registered.')
-
       const signupData = {
         name: form.value.name,
         dni: form.value.dni,
@@ -505,7 +486,7 @@
       // The new user signs in through the OAuth login page.
       await userManager.signinRedirect({ state: { redirect: '/dashboard' } })
     } catch (error) {
-      console.error('Registration failed', error)
+      console.error('Registration failed', error?.message)
       alert('Registration failed.')
     }
   }

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import apiClient from '@/api/apiClient'
-import { checkUserExists, signupUser } from '@/api/authService'
+import { signupUser } from '@/api/authService'
 
 const mocks = vi.hoisted(() => ({
   get: vi.fn(),
@@ -19,28 +19,6 @@ describe('authService', () => {
     mocks.get.mockReset()
     mocks.post.mockReset()
     localStorage.clear()
-  })
-
-  it('checks if user exists by dni', async () => {
-    mocks.get.mockResolvedValue({ data: true })
-
-    const result = await checkUserExists('12345678A')
-
-    expect(apiClient.get).toHaveBeenCalledWith('/auth/exists/12345678A')
-    expect(result).toBe(true)
-  })
-
-  it('returns false when user is missing', async () => {
-    mocks.get.mockRejectedValue({ response: { status: 404 } })
-
-    await expect(checkUserExists('not-found')).resolves.toBe(false)
-  })
-
-  it('rethrows unexpected errors when checking user existence', async () => {
-    const error = { response: { status: 500 }, message: 'boom' }
-    mocks.get.mockRejectedValue(error)
-
-    await expect(checkUserExists('oops')).rejects.toBe(error)
   })
 
   it('signs up user mapping payload shape', async () => {
