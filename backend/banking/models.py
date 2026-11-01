@@ -16,9 +16,9 @@ class Account(models.Model):
 
 class Card(models.Model):
     id = models.CharField(primary_key=True, max_length=32)
-    # PAN and CVV are stored in clear; only the PIN is encrypted, as in the original.
+    # The PAN is stored in clear and the PIN encrypted. The CVV is never stored:
+    # it is checked against the verifier service when the card is added.
     pan = models.CharField(max_length=32, db_index=True)
-    cvv = models.CharField(max_length=4)
     expire_date = models.DateField()
     alias = models.CharField(max_length=255)
     bank = models.CharField(max_length=255)

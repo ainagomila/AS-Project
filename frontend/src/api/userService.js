@@ -250,7 +250,6 @@ export async function getCardByPan(dni, pan) {
 export async function verifyCard(dni, accountId, pan, pin) {
   const url = `/users/${encodeURIComponent(dni)}/accounts/${encodeURIComponent(accountId)}/cards/${encodeURIComponent(pan)}/security/verify-card`
 
-  console.log('[verifyCardSensible] sending:', dni, accountId, pan, pin)
 
   const res = await apiClient.post(url, { pin })
 

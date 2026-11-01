@@ -1,12 +1,23 @@
 import pytest
 
+from banking import card_services
 from banking.models import Card
+from common.errors import AppError
 
 from .conftest import PIN
 
 pytestmark = pytest.mark.django_db
 
 PAN = "4111111111111111"
+
+
+@pytest.fixture(autouse=True)
+def verifier(monkeypatch):
+    """Stand-in for the verifier service: accepts CVV 123 only."""
+    monkeypatch.setattr(
+        card_services, "verifier_accepts", lambda pan, expire, cvv: cvv == "123"
+    )
+
 NEW = {
     "pan": "4111 1111 1111 1111",
     "expireDate": "05/29",
@@ -38,7 +49,7 @@ def test_create_card(ana, card):
         "expiryDate": "05/29",
     }
     stored = Card.objects.get(pan=PAN)
-    assert (stored.cvv, stored.pin) == ("123", "1234")
+    assert stored.pin == "1234"
     assert "1234" not in stored.pin_ciphertext
 
 
@@ -88,7 +99,7 @@ def test_verify_card_returns_secrets_for_the_user_pin(ana, card):
     ok = ana.client.post(url, {"pin": PIN}, format="json")
     assert (ok.status_code, ok.json()) == (
         200,
-        {"pan": PAN, "expireDate": "05/29", "cvv": "123", "pin": "1234"},
+        {"pan": PAN, "expireDate": "05/29", "pin": "1234"},
     )
     wrong = ana.client.post(url, {"pin": "000000"}, format="json")
     missing = ana.client.post(url, {}, format="json")
@@ -110,3 +121,20 @@ def test_card_on_another_users_account(ana, bob, card):
     assert (other.status_code, other.json()["code"]) == (403, "UNAUTHORIZED")
     wrong_account = bob.client.get(bob.url(f"/accounts/{bob.iban()}/cards/{PAN}"))
     assert (wrong_account.status_code, wrong_account.json()["code"]) == (403, "UNAUTHORIZED")
+
+
+def test_wrong_cvv_is_rejected_by_the_verifier(ana):
+    body = {**NEW, "cvv": "999"}
+    response = ana.client.post(ana.url(f"/accounts/{ana.iban()}/cards"), body, format="json")
+    assert (response.status_code, response.json()["code"]) == (400, "INVALID_CARD")
+    assert not Card.objects.exists()
+
+
+def test_verifier_down_is_an_infra_error(ana, monkeypatch):
+    def down(*args):
+        raise AppError("INFRA_ERROR", "Servei de verificació no disponible")
+
+    monkeypatch.setattr(card_services, "verifier_accepts", down)
+    response = ana.client.post(ana.url(f"/accounts/{ana.iban()}/cards"), NEW, format="json")
+    assert response.status_code == 500
+    assert not Card.objects.exists()
