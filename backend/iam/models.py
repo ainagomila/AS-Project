@@ -2,8 +2,6 @@ from django.db import models
 from django.contrib.auth.hashers import check_password, make_password
 from django.contrib.auth.models import BaseUserManager, AbstractBaseUser
 
-from common import crypto
-
 class UserManager(BaseUserManager):
     def create_user(self, dni, email, password=None, **extra_fields):
         if not email: raise ValueError("Users must have an email address")
@@ -26,9 +24,7 @@ class User(AbstractBaseUser):
     is_admin = models.BooleanField(default=False)
     objects = UserManager()
     password = models.CharField(max_length = 128)
-    pin_iv = models.CharField(max_length=32)
-    pin_ciphertext = models.TextField()
-    pin_tag = models.CharField(max_length=32)
+    pin = models.CharField(max_length=128)
     USERNAME_FIELD = 'dni'
     REQUIRED_FIELDS = []
 
@@ -43,13 +39,11 @@ class User(AbstractBaseUser):
     def check_password(self, raw):
         return check_password(raw, self.password)
 
-    @property
-    def pin(self):
-        return crypto.decrypt(self.pin_iv, self.pin_ciphertext, self.pin_tag)
+    def set_pin(self, raw):
+        self.pin = make_password(raw)
 
-    @pin.setter
-    def pin(self, plain):
-        self.pin_iv, self.pin_ciphertext, self.pin_tag = crypto.encrypt(plain)
+    def check_pin(self, raw):
+        return check_password(raw, self.pin)
 
     @property
     def phone(self):
