@@ -230,7 +230,7 @@ import {
   Check,
   X,
   Lock,
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import { ref, computed, nextTick, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import HeaderLayout from '@/components/layout/HeaderLayout.vue'

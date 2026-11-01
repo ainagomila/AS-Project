@@ -214,7 +214,7 @@
   import { ref, computed } from 'vue'
   import { signupUser } from '@/api/authService'
   import { userManager } from '@/api/oidc'
-  import { Eye, EyeOff } from 'lucide-vue-next'
+  import { Eye, EyeOff } from '@lucide/vue'
 
   /* ============================
      FORM DATA

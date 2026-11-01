@@ -48,7 +48,7 @@
 </template>
 
 <script setup>
-import { Plus, Wallet } from "lucide-vue-next"
+import { Plus, Wallet } from "@lucide/vue"
 import { ref, onMounted, nextTick, onBeforeUnmount, watch } from "vue"
 import { useRouter } from "vue-router"
 

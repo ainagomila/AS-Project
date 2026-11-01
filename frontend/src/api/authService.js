@@ -84,6 +84,6 @@ export async function signupUser(formData) {
   } catch (error) {
     console.error('Error registering user:', error.response?.data || error.message)
     const serverMessage = error.response?.data?.message || 'Unknown signup error.'
-    throw new Error(serverMessage)
+    throw new Error(serverMessage, { cause: error })
   }
 }

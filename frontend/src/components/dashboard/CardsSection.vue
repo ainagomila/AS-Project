@@ -37,7 +37,7 @@
 </template>
 
 <script setup>
-import { Plus, CreditCard } from 'lucide-vue-next'
+import { Plus, CreditCard } from '@lucide/vue'
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 
