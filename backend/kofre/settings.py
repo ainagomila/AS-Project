@@ -105,6 +105,10 @@ SECURITY_ENCRYPTION_KEY_BASE64 = os.environ.get("SECURITY_ENCRYPTION_KEY_BASE64"
 # Card verifier service (verifier-backend), reachable only on the internal network.
 VERIFIER_URL = os.environ.get("VERIFIER_URL", "http://localhost:5678")
 
+<<<<<<< HEAD
+=======
+SESSION_TTL_SECONDS = 86_400  # 24h
+>>>>>>> origin/feat/card-validation-encryption
 PASSWORD_HASHERS = [
     "django.contrib.auth.hashers.Argon2PasswordHasher",
     "django.contrib.auth.hashers.PBKDF2PasswordHasher",
