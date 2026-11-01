@@ -22,7 +22,6 @@ describe('AddAccountModal', () => {
     await wrapper.get('[data-testid="add-account-iban-input"]').setValue('ES9121000418450200051332')
     await wrapper.get('[data-testid="add-account-name-input"]').setValue('Savings')
     await wrapper.get('[data-testid="add-account-bank-input"]').setValue('Santander')
-    await wrapper.get('[data-testid="add-account-balance-input"]').setValue('1500')
     await wrapper.get('[data-testid="add-account-currency-select"]').setValue('EUR')
 
     await wrapper.get('form').trigger('submit.prevent')
@@ -32,8 +31,8 @@ describe('AddAccountModal', () => {
       iban: 'ES9121000418450200051332',
       name: 'Savings',
       bank: 'Santander',
-      balance: 1500,
       currency: 'EUR',
     })
+    expect(payload).not.toHaveProperty('balance')
   })
 })

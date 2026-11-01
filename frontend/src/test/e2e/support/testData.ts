@@ -114,7 +114,6 @@ export type TestAccount = {
     iban: string
     name: string
     bank: string
-    balance: number
     currency: string
 }
 
@@ -123,7 +122,6 @@ export function buildTestAccount(overrides: Partial<TestAccount> = {}): TestAcco
         iban: overrides.iban ?? generateIban(),
         name: overrides.name ?? `Savings ${uniqueSuffix()}`,
         bank: overrides.bank ?? 'Kofre Test Bank',
-        balance: overrides.balance ?? Number((Math.random() * 5000 + 100).toFixed(2)),
         currency: overrides.currency ?? 'EUR',
     }
 }
