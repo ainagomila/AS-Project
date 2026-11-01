@@ -1,13 +1,9 @@
-from django.conf import settings
 from django.urls import include, path
-from django.contrib.auth import views as auth_views
+
+from iam.login_views import LoginView
 
 urlpatterns = [
-    path(
-        "accounts/login/",
-        auth_views.LoginView.as_view(extra_context={"frontend_url": settings.FRONTEND_URL}),
-        name="login",
-    ),
+    path("accounts/login/", LoginView.as_view(), name="login"),
     path("o/", include("oauth2_provider.urls", namespace="oauth2_provider")),
     path("", include("iam.urls")),
     path("", include("banking.urls")),

@@ -1,24 +1,5 @@
 import apiClient from './apiClient'
 
-/**
- * Checks whether a user exists for the provided DNI.
- * @param {string} dni
- * @returns {Promise<boolean>}
- */
-export async function checkUserExists(dni) {
-  try {
-    await apiClient.get(`/auth/exists/${encodeURIComponent(dni)}`)
-    return true
-  } catch (error) {
-    if (error.response?.status === 404) {
-      return false
-    }
-
-    console.error('Error checking user existence:', error)
-    throw error
-  }
-}
-
 // Cambiar contraseña cuando NO puedes hacer login (flujo "Forgot password")
 export async function resetPassword(dni, pin, newPassword) {
   try {

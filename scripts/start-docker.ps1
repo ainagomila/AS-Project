@@ -59,11 +59,21 @@ mkcert -cert-file .certs/localhost.pem -key-file .certs/localhost-key.pem localh
 Copy-Item (Join-Path (mkcert -CAROOT) "rootCA.pem") .certs\rootCA.pem
 
 Set-Location $projectRoot
-if (-not (Select-String -Path .env -Pattern '^VERIFIER_SECRET_KEY=' -Quiet -ErrorAction SilentlyContinue)) {
-    Write-Host "Generating VERIFIER_SECRET_KEY in .env..."
-    $bytes = New-Object byte[] 32
-    [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
-    Add-Content -Path .env -Value ("VERIFIER_SECRET_KEY=" + (($bytes | ForEach-Object { $_.ToString("x2") }) -join ""))
+foreach ($name in "VERIFIER_SECRET_KEY", "DJANGO_SECRET_KEY", "POSTGRES_PASSWORD") {
+    if (-not (Select-String -Path .env -Pattern "^$name=" -Quiet -ErrorAction SilentlyContinue)) {
+        Write-Host "Generating $name in .env..."
+        $bytes = New-Object byte[] 32
+        [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+        Add-Content -Path .env -Value ("$name=" + (($bytes | ForEach-Object { $_.ToString("x2") }) -join ""))
+        if ($name -eq "POSTGRES_PASSWORD") {
+            Write-Warning "A database created with the old fixed password will refuse it: run 'docker compose down -v' once."
+        }
+    }
+}
+$composeFiles = @("-f", "docker-compose.yaml")
+if ((docker --version) -match "podman") {
+    $composeFiles += @("-f", "docker-compose.podman.yml")
 }
 Write-Host "Starting Docker Compose..."
-docker compose up --build
+# -V: fresh anonymous volumes (.venv, node_modules), owned by the images' non-root users.
+docker compose @composeFiles up --build -V
