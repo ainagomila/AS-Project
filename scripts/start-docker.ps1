@@ -59,5 +59,11 @@ mkcert -cert-file .certs/localhost.pem -key-file .certs/localhost-key.pem localh
 Copy-Item (Join-Path (mkcert -CAROOT) "rootCA.pem") .certs\rootCA.pem
 
 Set-Location $projectRoot
+if (-not (Select-String -Path .env -Pattern '^VERIFIER_SECRET_KEY=' -Quiet -ErrorAction SilentlyContinue)) {
+    Write-Host "Generating VERIFIER_SECRET_KEY in .env..."
+    $bytes = New-Object byte[] 32
+    [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+    Add-Content -Path .env -Value ("VERIFIER_SECRET_KEY=" + (($bytes | ForEach-Object { $_.ToString("x2") }) -join ""))
+}
 Write-Host "Starting Docker Compose..."
 docker compose up --build
