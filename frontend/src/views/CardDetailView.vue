@@ -390,7 +390,7 @@ onMounted(async () => {
 
     availableBalance.value = formatEUR(account.value.balance || 0)
   } catch (err) {
-    console.error('[CardDetail] Failed to load card:', err)
+    console.error('[CardDetail] Failed to load card:', err?.message)
     error.value = 'Failed to load card data'
   } finally {
     loading.value = false
@@ -430,7 +430,7 @@ async function saveName() {
     editingName.value = false
     showToast('Alias actualizado', 'success')
   } catch (e) {
-    console.error('[saveName] Failed to update card alias:', e)
+    console.error('[saveName] Failed to update card alias:', e?.message)
     showToast('No se pudo actualizar el alias de la tarjeta', 'error')
   } finally {
     savingName.value = false
@@ -513,7 +513,7 @@ async function confirmDelete() {
     showToast('Card deleted', 'success')
     router.push('/dashboard')
   } catch (e) {
-    console.error('[confirmDelete] Failed to delete card:', e)
+    console.error('[confirmDelete] Failed to delete card:', e?.message)
 
     const status = e?.response?.status
     const code = e?.response?.data?.code
@@ -589,7 +589,7 @@ function parseExpireDate(raw) {
 
     return `${month}/${year}`
   } catch (e) {
-    console.error('Date parsing failed:', e)
+    console.error('Date parsing failed:', e?.message)
     return 'MM/YY'
   }
 }
@@ -620,7 +620,7 @@ async function verifyUnlockPin() {
     isUnlocked.value = true
     closeUnlockPinModal()
   } catch (err) {
-    console.error('Failed to verify card:', err)
+    console.error('Failed to verify card:', err?.message)
     unlockPinError.value = true
     unlockPinErrorMessage.value = 'Incorrect PIN. Unable to unlock the card.'
     setTimeout(() => (unlockPinError.value = false), 600)
@@ -652,7 +652,7 @@ async function freezeCard() {
     cardStatus.value = nextStatus
     showToast(nextStatus === 'FREEZED' ? 'Card frozen' : 'Card activated', 'success')
   } catch (e) {
-    console.error('[freezeCard] Failed:', e)
+    console.error('[freezeCard] Failed:', e?.message)
     showToast('Could not update card status', 'error')
   }
 }
@@ -667,7 +667,7 @@ async function reportIssue() {
     cardStatus.value = 'DEAD'
     showToast('Card reported', 'success')
   } catch (e) {
-    console.error('[reportIssue] Failed:', e)
+    console.error('[reportIssue] Failed:', e?.message)
     showToast('Unable to report card', 'error')
   }
 }
