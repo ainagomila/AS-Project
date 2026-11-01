@@ -29,7 +29,7 @@ test.describe('Dashboard account creation', () => {
 
     test('adds a new account and refreshes the list on success', async ({ page, request }) => {
         const { handle } = await bootstrapUser(page, request)
-        const account = buildTestAccount({ balance: 750 })
+        const account = buildTestAccount()
 
         const accountCards = page.locator('.accounts-grid .account-card')
         const accountsBefore = await accountCards.count()
@@ -54,7 +54,6 @@ test.describe('Dashboard account creation', () => {
         await page.getByTestId('add-account-iban-input').fill('ES12 34')
         await page.getByTestId('add-account-name-input').fill('Invalid IBAN account')
         await page.getByTestId('add-account-bank-input').fill('Bad Bank')
-        await page.getByTestId('add-account-balance-input').fill('120')
         await page.getByTestId('add-account-currency-select').selectOption('EUR')
 
         const submitBtn = page.getByTestId('add-account-submit-btn')
@@ -66,7 +65,7 @@ test.describe('Dashboard account creation', () => {
 
     test('surfaces backend errors when the creation API fails', async ({ page, request }) => {
         const { handle } = await bootstrapUser(page, request)
-        const account = buildTestAccount({ balance: 300 })
+        const account = buildTestAccount()
 
         await createAccountViaUi(page, account)
         handle.trackAccount(account.iban)
@@ -76,7 +75,6 @@ test.describe('Dashboard account creation', () => {
         await page.getByTestId('add-account-iban-input').fill(account.iban)
         await page.getByTestId('add-account-name-input').fill(`Duplicate ${account.name}`)
         await page.getByTestId('add-account-bank-input').fill(account.bank)
-        await page.getByTestId('add-account-balance-input').fill('250')
         await page.getByTestId('add-account-currency-select').selectOption('EUR')
 
         const dialogPromise = page.waitForEvent('dialog')

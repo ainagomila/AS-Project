@@ -3,10 +3,12 @@ TransfersQueryService and AuxPaymentService."""
 
 import re
 from datetime import date, datetime, timedelta, timezone
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
+from django.db import transaction
 from django.db.models import Q
 
+from banking.models import Account
 from banking.services import find_by_iban
 from common import ids
 from common import validators as v
@@ -39,6 +41,24 @@ def _resolve_user_account(dni, iban, pin=None, with_pin=False):
     return account
 
 
+def _transfer_amount(raw):
+    """A finite, strictly positive amount with at most two decimals."""
+    try:
+        if isinstance(raw, bool) or not isinstance(raw, (int, float, str)):
+            raise InvalidOperation
+        amount = Decimal(str(raw).strip())
+        cents = amount.quantize(Decimal("0.01"))
+        if not amount.is_finite():
+            raise InvalidOperation
+    except InvalidOperation:
+        raise AppError("INVALID_MONEY_AMOUNT", "L''amount' és invàlid.") from None
+    if amount <= 0:
+        raise AppError("DOMAIN_ERROR", "L''amount' ha de ser estrictament positiu.")
+    if amount != cents:
+        raise AppError("INVALID_MONEY_AMOUNT", "L''amount' admet com a màxim dos decimals.")
+    return cents
+
+
 def _now_iso():
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
@@ -53,8 +73,7 @@ def add_transfer(dni, iban, beneficiary, destination_iban, amount, currency, con
         raise AppError("APPLICATION_ERROR", "El camp 'beneficiary' és obligatori!")
     if not v.is_valid_iban(destination_iban):
         raise AppError("INVALID_IBAN_FORMAT", "El 'destinationIban' és invàlid.")
-    if amount is None or Decimal(str(amount)) <= 0:
-        raise AppError("DOMAIN_ERROR", "L''amount' ha de ser estrictament positiu.")
+    transfer_amount = _transfer_amount(amount)
     if not has_text(currency):
         raise AppError("DOMAIN_ERROR", "La 'currency' és obligatòria.")
     if not has_text(concept):
@@ -73,9 +92,10 @@ def add_transfer(dni, iban, beneficiary, destination_iban, amount, currency, con
     destination = find_by_iban(destination_iban)
     if destination is None:
         raise AppError("ACCOUNT_NOT_FOUND", "El compte destí és inexistent!")
+    if destination.pk == source.pk:
+        raise AppError("DOMAIN_ERROR", "El compte destí ha de ser diferent del d'origen!")
 
     # An unknown currency is not caught in the original either and answers 500.
-    transfer_amount = v.money_amount(amount)
     transfer_currency = v.validate_currency(currency)
     if source.currency != transfer_currency:
         raise AppError(
@@ -86,28 +106,33 @@ def add_transfer(dni, iban, beneficiary, destination_iban, amount, currency, con
             "DOMAIN_ERROR", "La divisa del compte destí no coincideix amb la del pagament!"
         )
 
-    if source.balance < transfer_amount:
-        raise AppError("INSUFFICIENT_FUNDS", "Fons insuficients al compte d'origen!")
-    source.balance = source.balance - transfer_amount
-    destination.balance = destination.balance + transfer_amount
-
-    # Three independent writes, in this order, with no transaction: same as the
-    # original's three upserts.
-    source.save()
-    destination.save()
-    Payment.objects.create(
-        id=ids.generate("PAY"),
-        emitter_id=source.iban,
-        receiver_id=destination_iban,
-        type="BANK_TRANSFER",
-        categories=parsed_categories,
-        amount=transfer_amount,
-        currency=transfer_currency,
-        concept=concept,
-        payment_date=_now_iso(),
-        status="COMPLETED",
-        failure_reason=None,
-    )
+    # Debit, credit and payment record commit together. Both rows are locked in
+    # primary-key order so concurrent transfers cannot deadlock or overspend.
+    with transaction.atomic():
+        locked = Account.objects.select_for_update().filter(pk__in=[source.pk, destination.pk])
+        locked = {a.pk: a for a in locked.order_by("pk")}
+        if len(locked) != 2:
+            raise AppError("ACCOUNT_NOT_FOUND", "Account inexitent!")
+        source, destination = locked[source.pk], locked[destination.pk]
+        if source.balance < transfer_amount:
+            raise AppError("INSUFFICIENT_FUNDS", "Fons insuficients al compte d'origen!")
+        source.balance -= transfer_amount
+        destination.balance += transfer_amount
+        source.save(update_fields=["balance"])
+        destination.save(update_fields=["balance"])
+        Payment.objects.create(
+            id=ids.generate("PAY"),
+            emitter_id=source.iban,
+            receiver_id=destination_iban,
+            type="BANK_TRANSFER",
+            categories=parsed_categories,
+            amount=transfer_amount,
+            currency=transfer_currency,
+            concept=concept,
+            payment_date=_now_iso(),
+            status="COMPLETED",
+            failure_reason=None,
+        )
 
 
 def _payment_date(payment):

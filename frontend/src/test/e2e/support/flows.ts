@@ -81,7 +81,6 @@ export type AccountFormData = {
     iban: string
     name: string
     bank: string
-    balance: number
     currency: string
 }
 
@@ -90,7 +89,6 @@ export async function createAccountViaUi(page: Page, account: AccountFormData) {
     await page.getByTestId('add-account-iban-input').fill(account.iban)
     await page.getByTestId('add-account-name-input').fill(account.name)
     await page.getByTestId('add-account-bank-input').fill(account.bank)
-    await page.getByTestId('add-account-balance-input').fill(String(account.balance))
     await page.getByTestId('add-account-currency-select').selectOption(account.currency)
     await page.getByTestId('add-account-submit-btn').click()
     const newAccountCard = page.locator('.account-card', { hasText: account.name }).first()
