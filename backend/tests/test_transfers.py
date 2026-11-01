@@ -77,7 +77,7 @@ def test_cannot_transfer_from_someone_elses_account(ana, bob):
         {"beneficiary": "x", "destinationIban": ana.iban(), "amount": 5, "currency": "EUR", "concept": "x", "pin": PIN},
         format="json",
     )
-    assert (response.status_code, response.json()["code"]) == (403, "UNAUTHORIZED")
+    assert (response.status_code, response.json()["code"]) == (404, "ACCOUNT_NOT_FOUND")
 
 
 def test_history_filters_and_sorting(ana, bob):

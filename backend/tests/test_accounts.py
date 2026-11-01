@@ -66,6 +66,8 @@ def test_rename_needs_a_name(ana):
     assert (response.status_code, response.json()["code"]) == (422, "APPLICATION_ERROR")
 
 
-def test_other_users_account_is_refused(ana, bob):
-    response = ana.client.get(ana.url(f"/accounts/{bob.iban()}"))
-    assert (response.status_code, response.json()["code"]) == (403, "UNAUTHORIZED")
+def test_other_users_account_looks_like_a_missing_one(ana, bob):
+    foreign = ana.client.get(ana.url(f"/accounts/{bob.iban()}"))
+    missing = ana.client.get(ana.url("/accounts/ES9121000418450200051332"))
+    assert (foreign.status_code, foreign.json()) == (missing.status_code, missing.json())
+    assert (foreign.status_code, foreign.json()["code"]) == (404, "ACCOUNT_NOT_FOUND")

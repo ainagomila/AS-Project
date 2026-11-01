@@ -8,6 +8,9 @@ from . import card_services, services
 
 
 class AccountListView(AuthenticatedView):
+    resource_type = "user"
+    actions = {"GET": "list-accounts", "POST": "create-account"}
+
     def get(self, request, dni):
         return Response(services.list_accounts(dni))
 
@@ -24,6 +27,9 @@ class AccountListView(AuthenticatedView):
 
 
 class AccountDetailView(AuthenticatedView):
+    resource_type = "account"
+    actions = {"GET": "read", "PATCH": "rename", "DELETE": "delete"}
+
     def get(self, request, dni, iban):
         return Response(services.get_account(dni, iban))
 
@@ -36,11 +42,17 @@ class AccountDetailView(AuthenticatedView):
 
 
 class UserCardsView(AuthenticatedView):
+    resource_type = "user"
+    actions = {"GET": "list-cards"}
+
     def get(self, request, dni):
         return Response(card_services.list_user_cards(dni))
 
 
 class AccountCardsView(AuthenticatedView):
+    resource_type = "account"
+    actions = {"GET": "list-cards", "POST": "create-card"}
+
     def get(self, request, dni, iban):
         return Response(card_services.list_account_cards(dni, iban))
 
@@ -60,6 +72,9 @@ class AccountCardsView(AuthenticatedView):
 
 
 class CardDetailView(AuthenticatedView):
+    resource_type = "card"
+    actions = {"GET": "read", "PATCH": "update", "DELETE": "delete"}
+
     def get(self, request, dni, iban, pan):
         return Response(card_services.get_card(dni, pan))
 
@@ -79,5 +94,8 @@ class CardDetailView(AuthenticatedView):
 
 
 class VerifyCardView(AuthenticatedView):
+    resource_type = "card"
+    actions = {"POST": "verify-card"}
+
     def post(self, request, dni, iban, pan):
         return Response(card_services.verify_card(dni, iban, pan, text(request, "pin")))

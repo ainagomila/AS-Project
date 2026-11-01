@@ -3,13 +3,15 @@ AccountQueryService."""
 
 from decimal import Decimal
 
+from django.db import transaction
+
 from common import ids
 from common import validators as v
 from common.errors import AppError
 from common.validators import has_text
 from iam.services import find_by_dni
 
-from .models import Account
+from .models import Account, Card
 
 
 def account_response(account):
@@ -107,5 +109,8 @@ def rename_account(dni, iban, name):
 
 
 def delete_account(dni, iban, pin):
-    # Cards and payments of the account are left behind, as in the original.
-    get_owned_account_with_pin(dni, iban, pin).delete()
+    """Delete the account and its cards. Payments are kept as the counterparty's history."""
+    account = get_owned_account_with_pin(dni, iban, pin)
+    with transaction.atomic():
+        Card.objects.filter(account_id=account.id).delete()
+        account.delete()

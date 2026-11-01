@@ -75,7 +75,7 @@ def test_protected_routes_need_a_matching_live_token(client, ana, bob):
     assert client.get(ana.url(), HTTP_AUTHORIZATION="Token abc").status_code == 401
     assert client.get(ana.url(), HTTP_AUTHORIZATION="Bearer nope").status_code == 401
     other = bob.client.get(ana.url())
-    assert (other.status_code, other.content) == (401, b"")
+    assert (other.status_code, other.json()["code"]) == (403, "FORBIDDEN")
 
     AccessToken.objects.filter(token=ana.token).update(expires=timezone.now() - timedelta(seconds=1))
     assert ana.client.get(ana.url()).status_code == 401

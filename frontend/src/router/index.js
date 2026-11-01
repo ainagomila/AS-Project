@@ -105,7 +105,7 @@ const routes = [
     path: '/admin',
     name: 'Admin',
     component: AdminView,
-    meta: { requiresAuth: true, requiresAdmin: true },
+    meta: { requiresAuth: true, requiresStaff: true },
   },
   // Catch-all
   {
@@ -150,8 +150,8 @@ router.beforeEach((to, from, next) => {
     })
   }
 
-  // 3) Rutas de administración: solo si el perfil guardado es admin
-  if (to.meta.requiresAdmin && !userStore.isAdmin) {
+  // 3) Back office: only staff (admin or auditor). Cosmetic: the backend policy decides.
+  if (to.meta.requiresStaff && !userStore.isStaff) {
     return next({ name: 'Dashboard' })
   }
 

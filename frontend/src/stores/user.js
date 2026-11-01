@@ -14,7 +14,13 @@ export const useUserStore = defineStore('user', () => {
   const birthday = computed(() => userData.value?.birthday ?? '')
   const gender = computed(() => userData.value?.gender ?? '')
   const pin = computed(() => userData.value?.pin ?? '')
-  const isAdmin = computed(() => userData.value?.admin === true)
+  // Display only: what each role may do is decided by the backend's XACML policy.
+  const role = computed(
+    () => userData.value?.role ?? (userData.value?.admin === true ? 'admin' : 'customer'),
+  )
+  const isAdmin = computed(() => role.value === 'admin')
+  const isAuditor = computed(() => role.value === 'auditor')
+  const isStaff = computed(() => isAdmin.value || isAuditor.value)
 
   /**
    * Marks the user as signed in.
@@ -44,7 +50,10 @@ export const useUserStore = defineStore('user', () => {
     birthday,
     gender,
     pin,
+    role,
     isAdmin,
+    isAuditor,
+    isStaff,
     login,
     logout,
   }

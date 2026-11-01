@@ -1,0 +1,824 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Kofre access and privacy policy (XACML 3.0).
+
+  Evaluated by authz/xacml.py for every API request. The enforcement point
+  (authz/pep.py) denies anything this policy does not explicitly permit,
+  including NotApplicable and Indeterminate results.
+
+  Roles (urn:oasis:names:tc:xacml:2.0:subject:role):
+    customer  uses the bank: only their own profile, accounts, cards and transfers.
+    admin     manages identities: lists users and enables or disables customers.
+              Cannot see balances or transfers, and cannot touch staff accounts.
+    auditor   oversees money flows: reads accounts and transfers of any user,
+              always pseudonymised, and reads the audit log. Changes nothing.
+
+  Obligations the enforcement point must fulfil (or else deny):
+    urn:kofre:obligation:audit               write an audit event
+    urn:kofre:obligation:mask-personal-data  mask the listed fields in the response
+  Advice it uses to shape the error:
+    urn:kofre:advice:error                   error code and message
+    urn:kofre:advice:conceal-existence       answer "not found", so a foreign
+                                             resource looks like a missing one
+-->
+<PolicySet xmlns="urn:oasis:names:tc:xacml:3.0:core:schema:wd-17"
+           PolicySetId="urn:kofre:policyset:root"
+           Version="1.0"
+           PolicyCombiningAlgId="urn:oasis:names:tc:xacml:3.0:policy-combining-algorithm:deny-overrides">
+  <Description>Root policy set. Any Deny wins, and every Deny is audited.</Description>
+  <Target/>
+
+  <!-- ===================================================================
+       1. Session: conditions that block a signed-in subject everywhere.
+       =================================================================== -->
+  <Policy PolicyId="urn:kofre:policy:session" Version="1.0"
+          RuleCombiningAlgId="urn:oasis:names:tc:xacml:3.0:rule-combining-algorithm:deny-overrides">
+    <Description>Disabled users and tokens without the banking scope are refused.</Description>
+    <Target/>
+
+    <Rule RuleId="urn:kofre:rule:disabled-user" Effect="Deny">
+      <Condition>
+        <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:and">
+          <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:boolean-one-and-only">
+            <AttributeDesignator Category="urn:oasis:names:tc:xacml:1.0:subject-category:access-subject"
+                                 AttributeId="urn:kofre:subject:authenticated"
+                                 DataType="http://www.w3.org/2001/XMLSchema#boolean" MustBePresent="true"/>
+          </Apply>
+          <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:not">
+            <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:boolean-one-and-only">
+              <AttributeDesignator Category="urn:oasis:names:tc:xacml:1.0:subject-category:access-subject"
+                                   AttributeId="urn:kofre:subject:active"
+                                   DataType="http://www.w3.org/2001/XMLSchema#boolean" MustBePresent="true"/>
+            </Apply>
+          </Apply>
+        </Apply>
+      </Condition>
+      <AdviceExpressions>
+        <AdviceExpression AdviceId="urn:kofre:advice:error" AppliesTo="Deny">
+          <AttributeAssignmentExpression AttributeId="urn:kofre:advice:code">
+            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">USER_DISABLED</AttributeValue>
+          </AttributeAssignmentExpression>
+          <AttributeAssignmentExpression AttributeId="urn:kofre:advice:message">
+            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">L'usuari està deshabilitat</AttributeValue>
+          </AttributeAssignmentExpression>
+        </AdviceExpression>
+      </AdviceExpressions>
+    </Rule>
+
+    <Rule RuleId="urn:kofre:rule:missing-banking-scope" Effect="Deny">
+      <Condition>
+        <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:and">
+          <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:boolean-one-and-only">
+            <AttributeDesignator Category="urn:oasis:names:tc:xacml:1.0:subject-category:access-subject"
+                                 AttributeId="urn:kofre:subject:authenticated"
+                                 DataType="http://www.w3.org/2001/XMLSchema#boolean" MustBePresent="true"/>
+          </Apply>
+          <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:not">
+            <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-is-in">
+              <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">banking</AttributeValue>
+              <AttributeDesignator Category="urn:oasis:names:tc:xacml:1.0:subject-category:access-subject"
+                                   AttributeId="urn:kofre:subject:scope"
+                                   DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="false"/>
+            </Apply>
+          </Apply>
+        </Apply>
+      </Condition>
+      <AdviceExpressions>
+        <AdviceExpression AdviceId="urn:kofre:advice:error" AppliesTo="Deny">
+          <AttributeAssignmentExpression AttributeId="urn:kofre:advice:code">
+            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">FORBIDDEN</AttributeValue>
+          </AttributeAssignmentExpression>
+          <AttributeAssignmentExpression AttributeId="urn:kofre:advice:message">
+            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">El token no té l'abast 'banking'</AttributeValue>
+          </AttributeAssignmentExpression>
+        </AdviceExpression>
+      </AdviceExpressions>
+    </Rule>
+  </Policy>
+
+  <!-- ===================================================================
+       2. Public endpoints (no token).
+       =================================================================== -->
+  <Policy PolicyId="urn:kofre:policy:public" Version="1.0"
+          RuleCombiningAlgId="urn:oasis:names:tc:xacml:1.0:rule-combining-algorithm:first-applicable">
+    <Target>
+      <AnyOf>
+        <AllOf>
+          <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">public</AttributeValue>
+            <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:resource"
+                                 AttributeId="urn:kofre:resource:type"
+                                 DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+          </Match>
+        </AllOf>
+      </AnyOf>
+    </Target>
+
+    <Rule RuleId="urn:kofre:rule:public-actions" Effect="Permit">
+      <Target>
+        <AnyOf>
+          <AllOf>
+            <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+              <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">register</AttributeValue>
+              <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:action"
+                                   AttributeId="urn:oasis:names:tc:xacml:1.0:action:action-id"
+                                   DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+            </Match>
+          </AllOf>
+          <AllOf>
+            <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+              <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">check-dni</AttributeValue>
+              <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:action"
+                                   AttributeId="urn:oasis:names:tc:xacml:1.0:action:action-id"
+                                   DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+            </Match>
+          </AllOf>
+          <AllOf>
+            <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+              <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">reset-password</AttributeValue>
+              <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:action"
+                                   AttributeId="urn:oasis:names:tc:xacml:1.0:action:action-id"
+                                   DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+            </Match>
+          </AllOf>
+        </AnyOf>
+      </Target>
+    </Rule>
+
+    <Rule RuleId="urn:kofre:rule:public-default" Effect="Deny"/>
+  </Policy>
+
+  <!-- ===================================================================
+       3. Self-service: a user acts on their own profile, accounts and cards.
+       =================================================================== -->
+  <Policy PolicyId="urn:kofre:policy:self-service" Version="1.0"
+          RuleCombiningAlgId="urn:oasis:names:tc:xacml:1.0:rule-combining-algorithm:first-applicable">
+    <Description>
+      The DNI in the URL must be the caller's. Accounts and cards must belong to
+      the caller; anything else is answered as if it did not exist. Actions that
+      move money, delete data or reveal secrets are audited.
+    </Description>
+    <Target>
+      <AnyOf>
+        <AllOf>
+          <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">user</AttributeValue>
+            <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:resource"
+                                 AttributeId="urn:kofre:resource:type"
+                                 DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+          </Match>
+        </AllOf>
+        <AllOf>
+          <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">account</AttributeValue>
+            <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:resource"
+                                 AttributeId="urn:kofre:resource:type"
+                                 DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+          </Match>
+        </AllOf>
+        <AllOf>
+          <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">card</AttributeValue>
+            <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:resource"
+                                 AttributeId="urn:kofre:resource:type"
+                                 DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+          </Match>
+        </AllOf>
+      </AnyOf>
+    </Target>
+
+    <Rule RuleId="urn:kofre:rule:foreign-dni-in-path" Effect="Deny">
+      <Condition>
+        <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:not">
+          <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+            <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-one-and-only">
+              <AttributeDesignator Category="urn:oasis:names:tc:xacml:1.0:subject-category:access-subject"
+                                   AttributeId="urn:kofre:subject:dni"
+                                   DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+            </Apply>
+            <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-one-and-only">
+              <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:resource"
+                                   AttributeId="urn:kofre:resource:path-dni"
+                                   DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+            </Apply>
+          </Apply>
+        </Apply>
+      </Condition>
+      <AdviceExpressions>
+        <AdviceExpression AdviceId="urn:kofre:advice:error" AppliesTo="Deny">
+          <AttributeAssignmentExpression AttributeId="urn:kofre:advice:code">
+            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">FORBIDDEN</AttributeValue>
+          </AttributeAssignmentExpression>
+          <AttributeAssignmentExpression AttributeId="urn:kofre:advice:message">
+            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">Només pots accedir a les teves dades</AttributeValue>
+          </AttributeAssignmentExpression>
+        </AdviceExpression>
+      </AdviceExpressions>
+    </Rule>
+
+    <!-- Profile -->
+    <Rule RuleId="urn:kofre:rule:own-profile-audited" Effect="Permit">
+      <Target>
+        <AnyOf>
+          <AllOf>
+            <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+              <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">user</AttributeValue>
+              <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:resource"
+                                   AttributeId="urn:kofre:resource:type"
+                                   DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+            </Match>
+          </AllOf>
+        </AnyOf>
+        <AnyOf>
+          <AllOf>
+            <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+              <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">update</AttributeValue>
+              <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:action"
+                                   AttributeId="urn:oasis:names:tc:xacml:1.0:action:action-id"
+                                   DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+            </Match>
+          </AllOf>
+          <AllOf>
+            <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+              <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">delete</AttributeValue>
+              <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:action"
+                                   AttributeId="urn:oasis:names:tc:xacml:1.0:action:action-id"
+                                   DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+            </Match>
+          </AllOf>
+          <AllOf>
+            <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+              <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">verify-password</AttributeValue>
+              <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:action"
+                                   AttributeId="urn:oasis:names:tc:xacml:1.0:action:action-id"
+                                   DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+            </Match>
+          </AllOf>
+          <AllOf>
+            <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+              <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">create-account</AttributeValue>
+              <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:action"
+                                   AttributeId="urn:oasis:names:tc:xacml:1.0:action:action-id"
+                                   DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+            </Match>
+          </AllOf>
+        </AnyOf>
+      </Target>
+      <ObligationExpressions>
+        <ObligationExpression ObligationId="urn:kofre:obligation:audit" FulfillOn="Permit"/>
+      </ObligationExpressions>
+    </Rule>
+
+    <Rule RuleId="urn:kofre:rule:own-profile" Effect="Permit">
+      <Target>
+        <AnyOf>
+          <AllOf>
+            <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+              <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">user</AttributeValue>
+              <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:resource"
+                                   AttributeId="urn:kofre:resource:type"
+                                   DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+            </Match>
+          </AllOf>
+        </AnyOf>
+      </Target>
+    </Rule>
+
+    <!-- Accounts -->
+    <Rule RuleId="urn:kofre:rule:conceal-foreign-account" Effect="Deny">
+      <Target>
+        <AnyOf>
+          <AllOf>
+            <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+              <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">account</AttributeValue>
+              <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:resource"
+                                   AttributeId="urn:kofre:resource:type"
+                                   DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+            </Match>
+          </AllOf>
+        </AnyOf>
+      </Target>
+      <Condition>
+        <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:not">
+          <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-is-in">
+            <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-one-and-only">
+              <AttributeDesignator Category="urn:oasis:names:tc:xacml:1.0:subject-category:access-subject"
+                                   AttributeId="urn:oasis:names:tc:xacml:1.0:subject:subject-id"
+                                   DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+            </Apply>
+            <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:resource"
+                                 AttributeId="urn:kofre:resource:owner-id"
+                                 DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="false"/>
+          </Apply>
+        </Apply>
+      </Condition>
+      <AdviceExpressions>
+        <AdviceExpression AdviceId="urn:kofre:advice:conceal-existence" AppliesTo="Deny"/>
+      </AdviceExpressions>
+    </Rule>
+
+    <Rule RuleId="urn:kofre:rule:own-account-audited" Effect="Permit">
+      <Target>
+        <AnyOf>
+          <AllOf>
+            <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+              <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">account</AttributeValue>
+              <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:resource"
+                                   AttributeId="urn:kofre:resource:type"
+                                   DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+            </Match>
+          </AllOf>
+        </AnyOf>
+        <AnyOf>
+          <AllOf>
+            <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+              <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">transfer</AttributeValue>
+              <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:action"
+                                   AttributeId="urn:oasis:names:tc:xacml:1.0:action:action-id"
+                                   DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+            </Match>
+          </AllOf>
+          <AllOf>
+            <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+              <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">delete</AttributeValue>
+              <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:action"
+                                   AttributeId="urn:oasis:names:tc:xacml:1.0:action:action-id"
+                                   DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+            </Match>
+          </AllOf>
+          <AllOf>
+            <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+              <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">create-card</AttributeValue>
+              <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:action"
+                                   AttributeId="urn:oasis:names:tc:xacml:1.0:action:action-id"
+                                   DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+            </Match>
+          </AllOf>
+        </AnyOf>
+      </Target>
+      <ObligationExpressions>
+        <ObligationExpression ObligationId="urn:kofre:obligation:audit" FulfillOn="Permit"/>
+      </ObligationExpressions>
+    </Rule>
+
+    <Rule RuleId="urn:kofre:rule:own-account" Effect="Permit">
+      <Target>
+        <AnyOf>
+          <AllOf>
+            <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+              <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">account</AttributeValue>
+              <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:resource"
+                                   AttributeId="urn:kofre:resource:type"
+                                   DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+            </Match>
+          </AllOf>
+        </AnyOf>
+      </Target>
+    </Rule>
+
+    <!-- Cards: owned by the caller AND reached through the account they belong to -->
+    <Rule RuleId="urn:kofre:rule:conceal-foreign-card" Effect="Deny">
+      <Target>
+        <AnyOf>
+          <AllOf>
+            <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+              <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">card</AttributeValue>
+              <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:resource"
+                                   AttributeId="urn:kofre:resource:type"
+                                   DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+            </Match>
+          </AllOf>
+        </AnyOf>
+      </Target>
+      <Condition>
+        <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:not">
+          <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:and">
+            <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-is-in">
+              <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-one-and-only">
+                <AttributeDesignator Category="urn:oasis:names:tc:xacml:1.0:subject-category:access-subject"
+                                     AttributeId="urn:oasis:names:tc:xacml:1.0:subject:subject-id"
+                                     DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+              </Apply>
+              <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:resource"
+                                   AttributeId="urn:kofre:resource:owner-id"
+                                   DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="false"/>
+            </Apply>
+            <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-is-in">
+              <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-one-and-only">
+                <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:resource"
+                                     AttributeId="urn:kofre:resource:path-iban"
+                                     DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+              </Apply>
+              <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:resource"
+                                   AttributeId="urn:kofre:resource:account-iban"
+                                   DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="false"/>
+            </Apply>
+          </Apply>
+        </Apply>
+      </Condition>
+      <AdviceExpressions>
+        <AdviceExpression AdviceId="urn:kofre:advice:conceal-existence" AppliesTo="Deny"/>
+      </AdviceExpressions>
+    </Rule>
+
+    <Rule RuleId="urn:kofre:rule:own-card-audited" Effect="Permit">
+      <Target>
+        <AnyOf>
+          <AllOf>
+            <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+              <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">card</AttributeValue>
+              <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:resource"
+                                   AttributeId="urn:kofre:resource:type"
+                                   DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+            </Match>
+          </AllOf>
+        </AnyOf>
+        <AnyOf>
+          <AllOf>
+            <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+              <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">update</AttributeValue>
+              <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:action"
+                                   AttributeId="urn:oasis:names:tc:xacml:1.0:action:action-id"
+                                   DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+            </Match>
+          </AllOf>
+          <AllOf>
+            <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+              <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">delete</AttributeValue>
+              <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:action"
+                                   AttributeId="urn:oasis:names:tc:xacml:1.0:action:action-id"
+                                   DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+            </Match>
+          </AllOf>
+          <AllOf>
+            <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+              <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">verify-card</AttributeValue>
+              <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:action"
+                                   AttributeId="urn:oasis:names:tc:xacml:1.0:action:action-id"
+                                   DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+            </Match>
+          </AllOf>
+        </AnyOf>
+      </Target>
+      <ObligationExpressions>
+        <ObligationExpression ObligationId="urn:kofre:obligation:audit" FulfillOn="Permit"/>
+      </ObligationExpressions>
+    </Rule>
+
+    <Rule RuleId="urn:kofre:rule:own-card" Effect="Permit">
+      <Target>
+        <AnyOf>
+          <AllOf>
+            <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+              <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">card</AttributeValue>
+              <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:resource"
+                                   AttributeId="urn:kofre:resource:type"
+                                   DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+            </Match>
+          </AllOf>
+        </AnyOf>
+      </Target>
+    </Rule>
+  </Policy>
+
+  <!-- ===================================================================
+       4. User directory (GET /users): closed. Staff use /admin/users.
+       =================================================================== -->
+  <Policy PolicyId="urn:kofre:policy:user-directory" Version="1.0"
+          RuleCombiningAlgId="urn:oasis:names:tc:xacml:1.0:rule-combining-algorithm:first-applicable">
+    <Target>
+      <AnyOf>
+        <AllOf>
+          <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">user-directory</AttributeValue>
+            <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:resource"
+                                 AttributeId="urn:kofre:resource:type"
+                                 DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+          </Match>
+        </AllOf>
+      </AnyOf>
+    </Target>
+    <Rule RuleId="urn:kofre:rule:directory-closed" Effect="Deny">
+      <AdviceExpressions>
+        <AdviceExpression AdviceId="urn:kofre:advice:error" AppliesTo="Deny">
+          <AttributeAssignmentExpression AttributeId="urn:kofre:advice:code">
+            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">FORBIDDEN</AttributeValue>
+          </AttributeAssignmentExpression>
+          <AttributeAssignmentExpression AttributeId="urn:kofre:advice:message">
+            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">El directori d'usuaris no és públic</AttributeValue>
+          </AttributeAssignmentExpression>
+        </AdviceExpression>
+      </AdviceExpressions>
+    </Rule>
+  </Policy>
+
+  <!-- ===================================================================
+       5. Staff back office (/admin/...): administrators and auditors.
+       =================================================================== -->
+  <Policy PolicyId="urn:kofre:policy:staff" Version="1.0"
+          RuleCombiningAlgId="urn:oasis:names:tc:xacml:1.0:rule-combining-algorithm:first-applicable">
+    <Description>
+      Separation of duties: administrators manage identities but never see
+      money; auditors see money flows but never real identities, and change
+      nothing. Every staff action is audited.
+    </Description>
+    <Target>
+      <AnyOf>
+        <AllOf>
+          <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">staff-users</AttributeValue>
+            <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:resource"
+                                 AttributeId="urn:kofre:resource:type"
+                                 DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+          </Match>
+        </AllOf>
+        <AllOf>
+          <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">staff-user</AttributeValue>
+            <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:resource"
+                                 AttributeId="urn:kofre:resource:type"
+                                 DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+          </Match>
+        </AllOf>
+        <AllOf>
+          <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">staff-account</AttributeValue>
+            <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:resource"
+                                 AttributeId="urn:kofre:resource:type"
+                                 DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+          </Match>
+        </AllOf>
+        <AllOf>
+          <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">audit-log</AttributeValue>
+            <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:resource"
+                                 AttributeId="urn:kofre:resource:type"
+                                 DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+          </Match>
+        </AllOf>
+      </AnyOf>
+    </Target>
+
+    <Rule RuleId="urn:kofre:rule:staff-only" Effect="Deny">
+      <Condition>
+        <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:not">
+          <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:or">
+            <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-is-in">
+              <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">admin</AttributeValue>
+              <AttributeDesignator Category="urn:oasis:names:tc:xacml:1.0:subject-category:access-subject"
+                                   AttributeId="urn:oasis:names:tc:xacml:2.0:subject:role"
+                                   DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="false"/>
+            </Apply>
+            <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-is-in">
+              <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">auditor</AttributeValue>
+              <AttributeDesignator Category="urn:oasis:names:tc:xacml:1.0:subject-category:access-subject"
+                                   AttributeId="urn:oasis:names:tc:xacml:2.0:subject:role"
+                                   DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="false"/>
+            </Apply>
+          </Apply>
+        </Apply>
+      </Condition>
+      <AdviceExpressions>
+        <AdviceExpression AdviceId="urn:kofre:advice:error" AppliesTo="Deny">
+          <AttributeAssignmentExpression AttributeId="urn:kofre:advice:code">
+            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">FORBIDDEN</AttributeValue>
+          </AttributeAssignmentExpression>
+          <AttributeAssignmentExpression AttributeId="urn:kofre:advice:message">
+            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">Cal ser administrador o auditor</AttributeValue>
+          </AttributeAssignmentExpression>
+        </AdviceExpression>
+      </AdviceExpressions>
+    </Rule>
+
+    <Rule RuleId="urn:kofre:rule:conceal-unknown-target" Effect="Deny">
+      <Condition>
+        <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:not">
+          <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:boolean-one-and-only">
+            <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:resource"
+                                 AttributeId="urn:kofre:resource:exists"
+                                 DataType="http://www.w3.org/2001/XMLSchema#boolean" MustBePresent="true"/>
+          </Apply>
+        </Apply>
+      </Condition>
+      <AdviceExpressions>
+        <AdviceExpression AdviceId="urn:kofre:advice:conceal-existence" AppliesTo="Deny"/>
+      </AdviceExpressions>
+    </Rule>
+
+    <Rule RuleId="urn:kofre:rule:admin-lists-users" Effect="Permit">
+      <Target>
+        <AnyOf>
+          <AllOf>
+            <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+              <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">admin</AttributeValue>
+              <AttributeDesignator Category="urn:oasis:names:tc:xacml:1.0:subject-category:access-subject"
+                                   AttributeId="urn:oasis:names:tc:xacml:2.0:subject:role"
+                                   DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+            </Match>
+            <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+              <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">staff-users</AttributeValue>
+              <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:resource"
+                                   AttributeId="urn:kofre:resource:type"
+                                   DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+            </Match>
+            <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+              <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">list-users</AttributeValue>
+              <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:action"
+                                   AttributeId="urn:oasis:names:tc:xacml:1.0:action:action-id"
+                                   DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+            </Match>
+          </AllOf>
+        </AnyOf>
+      </Target>
+      <ObligationExpressions>
+        <ObligationExpression ObligationId="urn:kofre:obligation:audit" FulfillOn="Permit"/>
+      </ObligationExpressions>
+    </Rule>
+
+    <Rule RuleId="urn:kofre:rule:admin-changes-customer-status" Effect="Permit">
+      <Target>
+        <AnyOf>
+          <AllOf>
+            <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+              <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">admin</AttributeValue>
+              <AttributeDesignator Category="urn:oasis:names:tc:xacml:1.0:subject-category:access-subject"
+                                   AttributeId="urn:oasis:names:tc:xacml:2.0:subject:role"
+                                   DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+            </Match>
+            <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+              <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">set-status</AttributeValue>
+              <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:action"
+                                   AttributeId="urn:oasis:names:tc:xacml:1.0:action:action-id"
+                                   DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+            </Match>
+          </AllOf>
+        </AnyOf>
+      </Target>
+      <Condition>
+        <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:and">
+          <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-is-in">
+            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">customer</AttributeValue>
+            <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:resource"
+                                 AttributeId="urn:kofre:resource:target-role"
+                                 DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="false"/>
+          </Apply>
+          <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:not">
+            <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-is-in">
+              <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-one-and-only">
+                <AttributeDesignator Category="urn:oasis:names:tc:xacml:1.0:subject-category:access-subject"
+                                     AttributeId="urn:oasis:names:tc:xacml:1.0:subject:subject-id"
+                                     DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+              </Apply>
+              <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:resource"
+                                   AttributeId="urn:kofre:resource:target-user-id"
+                                   DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="false"/>
+            </Apply>
+          </Apply>
+        </Apply>
+      </Condition>
+      <ObligationExpressions>
+        <ObligationExpression ObligationId="urn:kofre:obligation:audit" FulfillOn="Permit"/>
+      </ObligationExpressions>
+    </Rule>
+
+    <Rule RuleId="urn:kofre:rule:staff-accounts-are-protected" Effect="Deny">
+      <Target>
+        <AnyOf>
+          <AllOf>
+            <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+              <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">admin</AttributeValue>
+              <AttributeDesignator Category="urn:oasis:names:tc:xacml:1.0:subject-category:access-subject"
+                                   AttributeId="urn:oasis:names:tc:xacml:2.0:subject:role"
+                                   DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+            </Match>
+            <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+              <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">set-status</AttributeValue>
+              <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:action"
+                                   AttributeId="urn:oasis:names:tc:xacml:1.0:action:action-id"
+                                   DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+            </Match>
+          </AllOf>
+        </AnyOf>
+      </Target>
+      <AdviceExpressions>
+        <AdviceExpression AdviceId="urn:kofre:advice:error" AppliesTo="Deny">
+          <AttributeAssignmentExpression AttributeId="urn:kofre:advice:code">
+            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">FORBIDDEN</AttributeValue>
+          </AttributeAssignmentExpression>
+          <AttributeAssignmentExpression AttributeId="urn:kofre:advice:message">
+            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">Només es poden deshabilitar clients, mai personal ni un mateix</AttributeValue>
+          </AttributeAssignmentExpression>
+        </AdviceExpression>
+      </AdviceExpressions>
+    </Rule>
+
+    <Rule RuleId="urn:kofre:rule:auditor-reads-pseudonymised" Effect="Permit">
+      <Target>
+        <AnyOf>
+          <AllOf>
+            <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+              <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">auditor</AttributeValue>
+              <AttributeDesignator Category="urn:oasis:names:tc:xacml:1.0:subject-category:access-subject"
+                                   AttributeId="urn:oasis:names:tc:xacml:2.0:subject:role"
+                                   DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+            </Match>
+          </AllOf>
+        </AnyOf>
+        <AnyOf>
+          <AllOf>
+            <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+              <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">list-users</AttributeValue>
+              <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:action"
+                                   AttributeId="urn:oasis:names:tc:xacml:1.0:action:action-id"
+                                   DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+            </Match>
+          </AllOf>
+          <AllOf>
+            <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+              <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">list-accounts</AttributeValue>
+              <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:action"
+                                   AttributeId="urn:oasis:names:tc:xacml:1.0:action:action-id"
+                                   DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+            </Match>
+          </AllOf>
+          <AllOf>
+            <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+              <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">list-transfers</AttributeValue>
+              <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:action"
+                                   AttributeId="urn:oasis:names:tc:xacml:1.0:action:action-id"
+                                   DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+            </Match>
+          </AllOf>
+        </AnyOf>
+      </Target>
+      <ObligationExpressions>
+        <ObligationExpression ObligationId="urn:kofre:obligation:mask-personal-data" FulfillOn="Permit">
+          <AttributeAssignmentExpression AttributeId="urn:kofre:obligation:field">
+            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">dni</AttributeValue>
+          </AttributeAssignmentExpression>
+          <AttributeAssignmentExpression AttributeId="urn:kofre:obligation:field">
+            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">name</AttributeValue>
+          </AttributeAssignmentExpression>
+          <AttributeAssignmentExpression AttributeId="urn:kofre:obligation:field">
+            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">email</AttributeValue>
+          </AttributeAssignmentExpression>
+          <AttributeAssignmentExpression AttributeId="urn:kofre:obligation:field">
+            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">phone</AttributeValue>
+          </AttributeAssignmentExpression>
+          <AttributeAssignmentExpression AttributeId="urn:kofre:obligation:field">
+            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">iban</AttributeValue>
+          </AttributeAssignmentExpression>
+        </ObligationExpression>
+        <ObligationExpression ObligationId="urn:kofre:obligation:audit" FulfillOn="Permit"/>
+      </ObligationExpressions>
+    </Rule>
+
+    <Rule RuleId="urn:kofre:rule:auditor-reads-audit-log" Effect="Permit">
+      <Target>
+        <AnyOf>
+          <AllOf>
+            <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+              <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">auditor</AttributeValue>
+              <AttributeDesignator Category="urn:oasis:names:tc:xacml:1.0:subject-category:access-subject"
+                                   AttributeId="urn:oasis:names:tc:xacml:2.0:subject:role"
+                                   DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+            </Match>
+            <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+              <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">audit-log</AttributeValue>
+              <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:resource"
+                                   AttributeId="urn:kofre:resource:type"
+                                   DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+            </Match>
+            <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+              <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">read</AttributeValue>
+              <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:action"
+                                   AttributeId="urn:oasis:names:tc:xacml:1.0:action:action-id"
+                                   DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+            </Match>
+          </AllOf>
+        </AnyOf>
+      </Target>
+      <ObligationExpressions>
+        <ObligationExpression ObligationId="urn:kofre:obligation:audit" FulfillOn="Permit"/>
+      </ObligationExpressions>
+    </Rule>
+
+    <Rule RuleId="urn:kofre:rule:separation-of-duties" Effect="Deny">
+      <Description>Everything else on the back office: admins reading money, auditors changing data.</Description>
+      <AdviceExpressions>
+        <AdviceExpression AdviceId="urn:kofre:advice:error" AppliesTo="Deny">
+          <AttributeAssignmentExpression AttributeId="urn:kofre:advice:code">
+            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">FORBIDDEN</AttributeValue>
+          </AttributeAssignmentExpression>
+          <AttributeAssignmentExpression AttributeId="urn:kofre:advice:message">
+            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">El teu rol no permet aquesta acció</AttributeValue>
+          </AttributeAssignmentExpression>
+        </AdviceExpression>
+      </AdviceExpressions>
+    </Rule>
+  </Policy>
+
+  <ObligationExpressions>
+    <ObligationExpression ObligationId="urn:kofre:obligation:audit" FulfillOn="Deny"/>
+  </ObligationExpressions>
+</PolicySet>

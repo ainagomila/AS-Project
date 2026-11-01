@@ -11,6 +11,10 @@ class UserManager(BaseUserManager):
         user.save(using=self._db)
         return user
     
+CUSTOMER, ADMIN, AUDITOR = "customer", "admin", "auditor"
+ROLES = [(CUSTOMER, "Customer"), (ADMIN, "Administrator"), (AUDITOR, "Auditor")]
+
+
 class User(AbstractBaseUser):
     id = models.CharField(primary_key=True, max_length=32)
     email = models.CharField(max_length=255)    
@@ -21,7 +25,8 @@ class User(AbstractBaseUser):
     birthdate = models.DateField()
     gender = models.CharField(max_length=8)
     is_active = models.BooleanField(default=True)
-    is_admin = models.BooleanField(default=False)
+    # Access rights are decided by the XACML policy (authz/policies) from this role.
+    role = models.CharField(max_length=16, choices=ROLES, default=CUSTOMER)
     objects = UserManager()
     password = models.CharField(max_length = 128)
     pin = models.CharField(max_length=128)

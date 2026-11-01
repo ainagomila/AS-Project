@@ -88,8 +88,28 @@ minutes) and otherwise signs out through `/o/logout/`, which revokes the tokens.
 Outside development set `DJANGO_SECRET_KEY`. Details are in section 7 of the
 [inventory](docs/vulnerability-inventory.md).
 
-To get an administrator, register a user in the app and run
-`uv run python manage.py create_admin <dni>` in `backend/`, then log in again.
+## Roles and privacy rules
+
+Access is decided by an XACML 3.0 policy,
+[`backend/authz/policies/kofre-policy.xml`](backend/authz/policies/kofre-policy.xml),
+evaluated for every API request (details in section 8 of the
+[inventory](docs/vulnerability-inventory.md)). There are three roles:
+
+| Role | Can do |
+|---|---|
+| `customer` (default) | Only their own profile, accounts, cards and transfers. |
+| `admin` | List users and enable or disable customers. Never sees balances or transfers, and cannot disable staff or themselves. |
+| `auditor` | Read any user's accounts and transfers with personal data masked, and read the audit trail. Changes nothing. |
+
+To give a role, register the user in the app and run, in `backend/`:
+
+```sh
+uv run python manage.py set_role <dni> admin     # or auditor, or customer
+```
+
+(`create_admin <dni>` still works.) With Docker:
+`docker compose exec backend uv run python manage.py set_role <dni> auditor`.
+The back office is the shield icon in the header.
 
 ## Test data
 
