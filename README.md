@@ -1,5 +1,7 @@
 # AS-Project
 
+[![CI](https://github.com/ainagomila/AS-Project/actions/workflows/ci.yml/badge.svg)](https://github.com/ainagomila/AS-Project/actions/workflows/ci.yml)
+
 Kofre: a small online banking web application used as the Application Security
 course project. This repository holds the **vulnerable baseline**: a Django port
 of an earlier Spring Boot backend, cut down to registration and login, accounts,
@@ -146,6 +148,11 @@ The frontend integration and browser tests talk to a running backend on
 `https://localhost:8080` and leave their test users in its database. They sign in
 through OAuth, so run them with `E2E_BASE_URL=https://localhost:5173`
 (`npm run test:e2e:local` does it).
+
+CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs on every push to
+`main` and every pull request: backend tests against Postgres, frontend lint and
+unit tests (Node 22), and the security scanner (`docker-compose.security.yml`),
+which fails on CRITICAL or HIGH findings.
 
 ## Docs
 

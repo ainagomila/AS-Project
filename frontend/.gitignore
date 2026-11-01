@@ -30,7 +30,6 @@ coverage
 *.tsbuildinfo
 .DS_Store
 
-package-lock.json
 # Playwright
 test-results/
 playwright-report/
