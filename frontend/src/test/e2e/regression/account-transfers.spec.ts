@@ -8,7 +8,7 @@ import {
     registerUserViaApi,
 } from '../support/testData'
 import { API_BASE_URL } from '../support/env'
-import { fetchLatestTransferPaymentId, trackPaymentIfPresent } from '../support/transfers'
+import { fetchLatestTransferPaymentId, fundAccountViaApi, trackPaymentIfPresent } from '../support/transfers'
 
 function buildWrongPin(pin) {
     if (!pin) {
@@ -81,9 +81,10 @@ test.describe('Account transfers', () => {
 
     test('sends a transfer when the beneficiary data and PIN are valid', async ({ page, request }) => {
         const { user, handle, destinationIban } = await bootstrap(page, request)
-        const account = buildTestAccount({ balance: 900 })
+        const account = buildTestAccount()
         await createSourceAccount(page, account)
         handle.trackAccount(account.iban)
+        await fundAccountViaApi(request, handle.credentials, account.iban, 60)
 
         await page.getByRole('button', { name: 'New Transfer' }).click()
         await expect(page).toHaveURL(/\/accounts\/.*\/transfer$/)
@@ -110,7 +111,7 @@ test.describe('Account transfers', () => {
 
     test('blocks submission when the amount exceeds the available balance', async ({ page, request }) => {
         const { handle } = await bootstrap(page, request)
-        const account = buildTestAccount({ balance: 120 })
+        const account = buildTestAccount()
         await createSourceAccount(page, account)
         handle.trackAccount(account.iban)
 
@@ -128,7 +129,7 @@ test.describe('Account transfers', () => {
 
     test('shows the IBAN helper error when the format is wrong', async ({ page, request }) => {
         const { handle } = await bootstrap(page, request)
-        const account = buildTestAccount({ balance: 400 })
+        const account = buildTestAccount()
         await createSourceAccount(page, account)
         handle.trackAccount(account.iban)
 
@@ -144,9 +145,10 @@ test.describe('Account transfers', () => {
 
     test('highlights the PIN hint when the backend rejects the confirmation', async ({ page, request }) => {
         const { user, handle } = await bootstrap(page, request)
-        const account = buildTestAccount({ balance: 500 })
+        const account = buildTestAccount()
         await createSourceAccount(page, account)
         handle.trackAccount(account.iban)
+        await fundAccountViaApi(request, handle.credentials, account.iban, 30)
 
         await page.getByRole('button', { name: 'New Transfer' }).click()
         await expect(page).toHaveURL(/\/accounts\/.*\/transfer$/)

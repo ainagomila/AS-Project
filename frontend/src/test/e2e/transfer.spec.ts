@@ -2,6 +2,7 @@
 import { autoAcceptDialogs, createAccountViaUi, fillPinInputs, logInThroughUi } from './support/flows'
 import { createCleanupManager } from './support/cleanup'
 import { buildTestAccount, buildTestUser, registerUserViaApi } from './support/testData'
+import { fundAccountViaApi } from './support/transfers'
 
 function buildWrongPin(pin) {
     if (!pin) {
@@ -31,9 +32,10 @@ test.describe('Account transfers', () => {
 
         await logInThroughUi(page, { dni: user.dni, password: user.password })
 
-        const account = buildTestAccount({ balance: 500 })
+        const account = buildTestAccount()
         await createAccountViaUi(page, account)
         userHandle.trackAccount(account.iban)
+        await fundAccountViaApi(request, userHandle.credentials, account.iban, 60)
 
         const accountCard = page.locator('.account-card', { hasText: account.name }).first()
         await expect(accountCard).toBeVisible({ timeout: 15_000 })
@@ -72,7 +74,7 @@ test.describe('Account transfers', () => {
 
         await logInThroughUi(page, { dni: user.dni, password: user.password })
 
-        const account = buildTestAccount({ balance: 150 })
+        const account = buildTestAccount()
         await createAccountViaUi(page, account)
         userHandle.trackAccount(account.iban)
 
@@ -96,7 +98,7 @@ test.describe('Account transfers', () => {
         await page.getByTestId('transfer-iban-input').fill(validIban)
         await expect(page.getByTestId('transfer-iban-status')).toContainText('IBAN format OK')
 
-        await page.getByTestId('transfer-amount-input').fill(String(account.balance + 50))
+        await page.getByTestId('transfer-amount-input').fill('50')
         const amountError = page.getByTestId('transfer-amount-error')
         await expect(amountError).toBeVisible()
         await expect(amountError).toHaveText('Amount exceeds available balance')

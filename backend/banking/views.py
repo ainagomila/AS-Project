@@ -17,7 +17,6 @@ class AccountListView(AuthenticatedView):
             text(request, "iban"),
             text(request, "name"),
             text(request, "bank"),
-            request.data.get("balance"),
             text(request, "currency"),
         )
         return Response(body, status=201)

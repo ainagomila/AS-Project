@@ -50,23 +50,6 @@
           <small v-if="errors.bank" class="err">{{ errors.bank }}</small>
         </div>
 
-        <!-- Amount -->
-        <div class="field">
-          <label>Amount</label>
-          <input
-            v-model.number="form.amount"
-            type="number"
-            min="0"
-            :max="MAX_AMOUNT"
-            step="0.01"
-            placeholder="1000"
-            data-testid="add-account-balance-input"
-            @input="validateAmount"
-            required
-          />
-          <small v-if="errors.amount" class="err">{{ errors.amount }}</small>
-        </div>
-
         <!-- Currency -->
         <div class="field">
           <label>Currency</label>
@@ -109,8 +92,6 @@
 <script setup>
 import { reactive, computed } from 'vue'
 
-const MAX_AMOUNT = 1_000_000_000 // 1 billón (1.000.000.000)
-
 defineProps({
   saving: { type: Boolean, default: false }
 })
@@ -121,7 +102,6 @@ const form = reactive({
   number: '',
   name: '',
   bank: '',
-  amount: null,
   currency: 'EUR'
 })
 
@@ -219,29 +199,6 @@ function validateBank() {
   delete errors.bank
 }
 
-function validateAmount() {
-  const v = form.amount
-
-  if (v === null || v === '' || isNaN(v)) {
-    errors.amount = 'Amount must be a number.'
-    return
-  }
-
-  const num = Number(v)
-
-  if (num < 0) {
-    errors.amount = 'Amount must be ≥ 0.'
-    return
-  }
-
-  if (num > MAX_AMOUNT) {
-    errors.amount = `Amount must be ≤ ${MAX_AMOUNT.toLocaleString('en-US')}.`
-    return
-  }
-
-  delete errors.amount
-}
-
 function validateCurrency() {
   const curr = (form.currency || '').trim().toUpperCase()
 
@@ -263,7 +220,6 @@ function validateAll() {
   validateIban()
   validateName()
   validateBank()
-  validateAmount()
   validateCurrency()
   return Object.keys(errors).length === 0
 }
@@ -275,17 +231,6 @@ const canSubmit = computed(() => {
   const nameOk = (form.name || '').trim().length >= 2
   const bankOk = (form.bank || '').trim().length >= 2 && !errors.bank
 
-  const amountNumeric =
-    form.amount !== null &&
-    form.amount !== '' &&
-    !isNaN(form.amount)
-
-  const amountOk =
-    amountNumeric &&
-    Number(form.amount) >= 0 &&
-    Number(form.amount) <= MAX_AMOUNT &&
-    !errors.amount
-
   const currOk = form.currency === 'EUR' && !errors.currency
   const ibanOk = /^ES\d{22}$/.test(raw) && !errors.number
 
@@ -293,7 +238,6 @@ const canSubmit = computed(() => {
     ibanOk &&
     nameOk &&
     bankOk &&
-    amountOk &&
     currOk &&
     Object.keys(errors).length === 0
   )
@@ -309,7 +253,6 @@ function submit() {
     iban: rawIban,
     name: form.name.trim(),
     bank: form.bank.trim(),
-    balance: Number(form.amount),
     currency: form.currency.trim().toUpperCase()
   })
 }

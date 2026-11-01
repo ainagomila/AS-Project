@@ -61,7 +61,6 @@ test.describe('Dashboard experience', () => {
         await page.getByTestId('add-account-iban-input').fill('ES12 34')
         await page.getByTestId('add-account-name-input').fill('Emergency fund')
         await page.getByTestId('add-account-bank-input').fill('Invalid Bank')
-        await page.getByTestId('add-account-balance-input').fill('100')
         await page.getByTestId('add-account-currency-select').selectOption('EUR')
 
         const submitBtn = page.getByTestId('add-account-submit-btn')

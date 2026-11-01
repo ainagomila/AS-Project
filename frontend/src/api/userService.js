@@ -133,7 +133,7 @@ export async function getAccount(dni, iban) {
 
 /**
  * Crea una nueva cuenta.
- * account = { iban, name, bank, balance, currency }
+ * account = { iban, name, bank, currency }; new accounts open at 0
  */
 export async function addAccount(dni, account) {
   const { data } = await apiClient.post(`/users/${encodeURIComponent(dni)}/accounts`, account)
