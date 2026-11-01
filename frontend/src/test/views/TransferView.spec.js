@@ -18,7 +18,6 @@ vi.mock('vue-router', () => ({
 const mockUserStore = {
   dni: '12345678A',
   isAuthenticated: true,
-  initFromStorage: vi.fn(),
 }
 
 vi.mock('@/stores/user', () => ({
@@ -50,7 +49,6 @@ beforeEach(() => {
   pushMock.mockReset()
   mockUserStore.dni = '12345678A'
   mockUserStore.isAuthenticated = true
-  mockUserStore.initFromStorage.mockClear()
   getAccountMock.mockReset()
   createTransferMock.mockReset()
   getAccountMock.mockResolvedValue({

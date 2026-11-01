@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kofre · Log in</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Open Sans', sans-serif; }
+    body { min-height: 100vh; background: #171717; color: #fff; }
+
+    .topbar { height: 65px; display: flex; align-items: center; padding: 0 32px;
+              border-bottom: 1px solid rgba(183, 155, 88, 0.3); }
+    .topbar h1 { font-size: 1.5rem; font-weight: 700; color: #b79b58; letter-spacing: 1px; }
+
+    .content { min-height: calc(100vh - 65px); display: flex; align-items: center;
+               justify-content: center; padding: 24px 16px; }
+    .wrapper { width: 100%; max-width: 450px; padding: 40px; text-align: center;
+               border: 2px solid #b79b58; background: rgba(255, 255, 255, 0.05);
+               backdrop-filter: blur(12px); border-radius: 22px;
+               box-shadow: 0 6px 26px rgba(183, 155, 88, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.03);
+               transition: background-color 0.25s ease, transform 0.25s ease; }
+    .wrapper:hover, .wrapper:focus-within { background: rgba(255, 255, 255, 0.1); transform: translateY(-3px); }
+
+    h2 { font-size: 2rem; margin-bottom: 20px; font-weight: 600; }
+
+    .error { margin-bottom: 12px; padding: 10px 12px; border-radius: 10px; font-size: 0.9rem;
+             border: 1px solid rgba(255, 99, 99, 0.6); background: rgba(255, 99, 99, 0.12); }
+
+    .input-field { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin: 12px 0; }
+    .input-field label { font-size: 0.95rem; }
+    .input-box { width: 100%; position: relative; }
+    .input-box input { width: 100%; height: 42px; background: transparent; border-radius: 10px;
+                       border: 2px solid rgba(255, 255, 255, 0.25); padding: 0 12px; color: #fff;
+                       outline: none; transition: border-color 0.25s ease, background-color 0.25s ease; }
+    .input-box input:focus { border-color: transparent; background: rgba(0, 0, 0, 0.15); }
+    .input-box input::placeholder { color: rgba(255, 255, 255, 0.45); font-size: 0.9rem; opacity: 1; font-style: italic; }
+    .input-box input:focus::placeholder { color: rgba(255, 255, 255, 0.25); }
+    .input-box input[type='password']::placeholder { letter-spacing: 3px; }
+    .border-anim { pointer-events: none; position: absolute; inset: 0; border-radius: 10px;
+                   border: 2px solid #b79b58; clip-path: inset(0 100% 0 0); transition: clip-path 0.4s ease-in-out; }
+    .input-box input:focus + .border-anim { clip-path: inset(0 0 0 0); }
+
+    .toggle { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); z-index: 1;
+              background: transparent; border: none; color: rgba(255, 255, 255, 0.6);
+              font-size: 0.8rem; cursor: pointer; }
+    .toggle:hover { color: #fff; }
+    .with-toggle input { padding-right: 56px; }
+
+    .login-btn { width: 100%; height: 48px; margin-top: 28px; border-radius: 10px;
+                 border: 2px solid rgba(183, 155, 88, 0.45); background: transparent; color: #fff;
+                 font-size: 16px; font-weight: 600; cursor: pointer;
+                 transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease,
+                             transform 0.2s ease, box-shadow 0.25s ease; }
+    .login-btn:hover { background: #b79b58; border-color: #b79b58; color: #000;
+                       transform: translateY(-2px); box-shadow: 0 4px 14px rgba(183, 155, 88, 0.4); }
+
+    .links { margin-top: 16px; font-size: 0.9rem; }
+    .links a { color: #efefef; }
+    .links a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <header class="topbar"><h1>Kofre</h1></header>
+
+  <main class="content">
+    <div class="wrapper">
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ next }}">
+        <h2>Log in</h2>
+
+        {% if form.errors %}
+          <p class="error">Incorrect DNI or password.</p>
+        {% endif %}
+
+        <div class="input-field">
+          <label for="id_username">Enter your dni</label>
+          <div class="input-box">
+            <input id="id_username" name="username" type="text" placeholder="e.g. 12345678A"
+                   value="{{ form.username.value|default:'' }}" autocomplete="username" required autofocus>
+            <span class="border-anim"></span>
+          </div>
+        </div>
+
+        <div class="input-field">
+          <label for="id_password">Enter your password</label>
+          <div class="input-box with-toggle">
+            <input id="id_password" name="password" type="password" placeholder="••••••••"
+                   autocomplete="current-password" required>
+            <button type="button" class="toggle" id="toggle-password">Show</button>
+            <span class="border-anim"></span>
+          </div>
+        </div>
+
+        <button type="submit" class="login-btn">Log In</button>
+      </form>
+      <p class="links"><a href="{{ frontend_url }}/login?forgot=1">Forgot password?</a></p>
+      <p class="links">Don't have an account? <a href="{{ frontend_url }}/signup">Register</a></p>
+    </div>
+  </main>
+
+  <script>
+    var toggle = document.getElementById('toggle-password');
+    var field = document.getElementById('id_password');
+    toggle.addEventListener('click', function () {
+      var hidden = field.type === 'password';
+      field.type = hidden ? 'text' : 'password';
+      toggle.textContent = hidden ? 'Hide' : 'Show';
+    });
+  </script>
+</body>
+</html>

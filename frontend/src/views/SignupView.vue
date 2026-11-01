@@ -212,13 +212,9 @@
 <script setup lang="ts">
   import HeaderLayout from '@/components/layout/HeaderLayout.vue'
   import { ref, computed } from 'vue'
-  import { useRouter } from 'vue-router'
   import { signupUser, checkUserExists } from '@/api/authService'
-  import { useUserStore } from '@/stores/user'
+  import { userManager } from '@/api/oidc'
   import { Eye, EyeOff } from 'lucide-vue-next'
-
-  const router = useRouter()
-  const userStore = useUserStore()
 
   /* ============================
      FORM DATA
@@ -505,10 +501,9 @@
         gender: form.value.gender,
         pin: form.value.pin,
       }
-
-      const newUserResponse = await signupUser(signupData)
-      userStore.login(form.value.dni, newUserResponse)
-      router.push('/dashboard')
+      await signupUser(signupData)
+      // The new user signs in through the OAuth login page.
+      await userManager.signinRedirect({ state: { redirect: '/dashboard' } })
     } catch (error) {
       console.error('Registration failed', error)
       alert('Registration failed.')

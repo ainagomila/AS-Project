@@ -9,12 +9,12 @@ describe('admin access', () => {
     setActivePinia(createPinia())
   })
 
-  it('exposes the admin flag from the login payload', () => {
+  it('exposes the admin flag from the profile', () => {
     const store = useUserStore()
-    store.login('12345678Z', { token: 't', user: { dni: '12345678Z', admin: true } })
+    store.login('12345678Z', { dni: '12345678Z', admin: true })
     expect(store.isAdmin).toBe(true)
 
-    store.login('12345678Z', { token: 't', user: { dni: '12345678Z', admin: false } })
+    store.login('12345678Z', { dni: '12345678Z', admin: false })
     expect(store.isAdmin).toBe(false)
   })
 

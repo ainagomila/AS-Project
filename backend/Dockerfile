@@ -12,6 +12,5 @@ COPY . .
 
 EXPOSE 8080
 
-RUN uv run python manage.py migrate
 
-CMD ["uv", "run", "python", "manage.py", "runserver", "0.0.0.0:8080"]
+CMD ["sh", "-c", "mkdir -p .env.d && { [ -f .env.d/oidc.key ] || { openssl genrsa -out .env.d/oidc.key 2048 && chmod 600 .env.d/oidc.key; }; } && uv run python manage.py migrate && uv run python manage.py create_oauth_client && uv run python manage.py runserver_https 0.0.0.0:8080"]

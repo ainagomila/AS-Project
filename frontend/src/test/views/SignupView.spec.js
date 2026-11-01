@@ -7,19 +7,13 @@ import SignupView from '@/views/SignupView.vue'
 const mocks = vi.hoisted(() => ({
   signupUser: vi.fn(),
   checkUserExists: vi.fn(),
-  userStore: {
-    login: vi.fn(),
-  },
+  signinRedirect: vi.fn(),
 }))
 
-const MOCK_TOKEN = '11111111-2222-3333-4444-555555555555'
+vi.mock('@/api/oidc', () => ({ userManager: { signinRedirect: mocks.signinRedirect } }))
 vi.mock('@/api/authService', () => ({
   signupUser: mocks.signupUser,
   checkUserExists: mocks.checkUserExists,
-}))
-
-vi.mock('@/stores/user', () => ({
-  useUserStore: () => mocks.userStore,
 }))
 
 function createTestRouter() {
@@ -56,7 +50,7 @@ describe('SignupView', () => {
     globalThis.alert.mockClear()
     mocks.signupUser.mockReset()
     mocks.checkUserExists.mockReset()
-    mocks.userStore.login.mockReset()
+    mocks.signinRedirect.mockReset()
   })
 
   it('warns when passwords do not match', async () => {
@@ -105,13 +99,12 @@ describe('SignupView', () => {
     }
   })
 
-  it('registers new users and redirects to dashboard', async () => {
+  it('registers new users and starts the OAuth sign-in', async () => {
     mocks.checkUserExists.mockImplementation(async () => false)
-    mocks.signupUser.mockResolvedValue({ token: MOCK_TOKEN })
+    mocks.signupUser.mockResolvedValue({ message: 'created' })
     vi.useFakeTimers()
     try {
-      const { wrapper, router } = await mountSignupView()
-      const pushSpy = vi.spyOn(router, 'push')
+      const { wrapper } = await mountSignupView()
 
       await wrapper.get('#name').setValue('Ada Lovelace')
       await wrapper.get('#dni').setValue('87654321X')
@@ -140,9 +133,8 @@ describe('SignupView', () => {
         gender: 'female',
         pin: '123456',
       })
-      expect(mocks.userStore.login).toHaveBeenCalledWith('87654321X', { token: MOCK_TOKEN })
+      expect(mocks.signinRedirect).toHaveBeenCalledWith({ state: { redirect: '/dashboard' } })
       expect(globalThis.alert).not.toHaveBeenCalled()
-      expect(pushSpy).toHaveBeenCalledWith('/dashboard')
     } finally {
       vi.useRealTimers()
     }

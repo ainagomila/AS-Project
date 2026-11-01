@@ -17,7 +17,7 @@ test.describe('Login resilience', () => {
         await cleanup.cleanup()
     })
 
-    test('logs in successfully when API returns a valid session', async ({ page, request }) => {
+    test('logs in successfully with valid credentials', async ({ page, request }) => {
         autoAcceptDialogs(page)
         const user = buildTestUser()
         await registerUserViaApi(request, user)
@@ -27,37 +27,26 @@ test.describe('Login resilience', () => {
         await expect(page).toHaveURL(/\/dashboard$/)
         await expect(page.locator('.account-card')).toBeVisible()
         await page.locator('.logout-btn').click()
-        await expect(page).toHaveURL(/\/login$/)
+        await expect(page).toHaveURL(/\/$/)
     })
 
-    test('shows an alert when trying to submit empty credentials', async ({ page }) => {
-        autoAcceptDialogs(page)
+    test('does not submit an empty login form', async ({ page }) => {
         await page.goto('/login')
-        await page.getByTestId('login-dni-input').fill('   ')
-        await page.getByTestId('login-password-input').fill('Secret123')
-
-        const dialogPromise = page.waitForEvent('dialog')
-        await page.getByTestId('login-submit-btn').click()
-        const dialog = await dialogPromise
-        expect(dialog.message()).toMatch(/enter your credentials|credencials?.*incompletes?/i)
-        await expect(page).toHaveURL(/\/login$/)
+        await page.locator('.login-btn').click()
+        await expect(page).toHaveURL(/\/accounts\/login\//)
     })
 
-    test('surfaces backend error messages for rejected logins', async ({ page, request }) => {
-        autoAcceptDialogs(page)
+    test('shows the backend error for rejected logins', async ({ page, request }) => {
         const user = buildTestUser()
         await registerUserViaApi(request, user)
         cleanup.registerUser({ dni: user.dni, pin: user.pin, password: user.password })
 
         await page.goto('/login')
-        await page.getByTestId('login-dni-input').fill(user.dni)
-        await page.getByTestId('login-password-input').fill(`${user.password}!`)
+        await page.locator('#id_username').fill(user.dni)
+        await page.locator('#id_password').fill(`${user.password}!`)
+        await page.locator('.login-btn').click()
 
-        const dialogPromise = page.waitForEvent('dialog')
-        await page.getByTestId('login-submit-btn').click()
-        const dialog = await dialogPromise
-        expect(dialog.message()).toMatch(/invalid dni or password|credencials? inv/i)
-        await expect(page).toHaveURL(/\/login$/)
+        await expect(page.locator('.error')).toHaveText('Incorrect DNI or password.')
+        await expect(page).toHaveURL(/\/accounts\/login\//)
     })
 })
-
