@@ -57,6 +57,7 @@ import headerImg from '@/assets/header.png'
 import { useRouter, useRoute } from 'vue-router'
 import { ShieldCheck, Settings, LogOut } from 'lucide-vue-next'
 import { useUserStore } from '@/stores/user'
+import { userManager } from '@/api/oidc'
 import { computed } from 'vue'
 
 defineProps({
@@ -96,7 +97,7 @@ const goToProfile = () => {
 
 const handleLogout = () => {
   userStore.logout()
-  router.push('/login')
+  userManager.signoutRedirect()
 }
 </script>
 

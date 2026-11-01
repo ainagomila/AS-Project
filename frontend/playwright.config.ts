@@ -3,7 +3,7 @@ import { FRONTEND_BASE_URL } from './src/test/e2e/support/env'
 
 const shouldStartDevServer = !process.env.E2E_BASE_URL
 
-const DEV_SERVER_URL = 'http://127.0.0.1:4173'
+const DEV_SERVER_URL = 'https://127.0.0.1:4173'
 const DEFAULT_CI_WORKERS = 4
 
 // Keep worker logic centralized so both local and CI runs stay configurable.
@@ -31,6 +31,7 @@ export default defineConfig({
   reporter: process.env.CI ? 'github' : 'list',
   use: {
     baseURL: FRONTEND_BASE_URL,
+    ignoreHTTPSErrors: true,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',

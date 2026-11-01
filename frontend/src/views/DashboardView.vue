@@ -139,8 +139,6 @@
   
   // Inicialización
   onMounted(async () => {
-    userStore.initFromStorage()
-  
     if (!userStore.isAuthenticated || !userStore.dni) {
       router.push('/login')
       return

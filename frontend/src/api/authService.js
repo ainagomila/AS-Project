@@ -1,31 +1,5 @@
 import apiClient from './apiClient'
 
-const AUTH_TOKEN_KEY = 'authToken'
-
-/**
- * Persists or clears the auth token so every request can reuse it.
- * @param {string | null | undefined} token
- */
-function persistToken(token) {
-  if (!globalThis.localStorage) return
-
-  if (!token) {
-    globalThis.localStorage.removeItem(AUTH_TOKEN_KEY)
-    return
-  }
-
-  globalThis.localStorage.setItem(AUTH_TOKEN_KEY, token)
-}
-
-/**
- * Reads the stored auth token if it exists.
- * @returns {string | null}
- */
-function readStoredToken() {
-  if (!globalThis.localStorage) return null
-  return globalThis.localStorage.getItem(AUTH_TOKEN_KEY)
-}
-
 /**
  * Checks whether a user exists for the provided DNI.
  * @param {string} dni
@@ -41,27 +15,6 @@ export async function checkUserExists(dni) {
     }
 
     console.error('Error checking user existence:', error)
-    throw error
-  }
-}
-
-/**
- * Authenticates a user and stores the issued token.
- * @param {string} dni
- * @param {string} password
- * @returns {Promise<{token: string, user: object}>}
- */
-export async function loginUser(dni, password) {
-  try {
-    const { data } = await apiClient.post('/auth/login', {
-      dni,
-      password,
-    })
-
-    persistToken(data?.token)
-    return data
-  } catch (error) {
-    console.error('Login fallit:', error.response?.data || error.message)
     throw error
   }
 }
@@ -120,9 +73,9 @@ function normalizePhoneForBackend(rawPhone) {
 }
 
 /**
- * Registers a new user and stores the issued token.
+ * Registers a new user. The caller then starts the OAuth sign-in.
  * @param {object} formData
- * @returns {Promise<{message: string, token: string}>}
+ * @returns {Promise<{message: string}>}
  */
 export async function signupUser(formData) {
   // Normalizamos aquí sí o sí, tanto si la vista lo hace bien como si no
@@ -144,45 +97,12 @@ export async function signupUser(formData) {
     pin: formData.pin,
   }
 
-  console.log('Request enviado a /auth/register:', requestBody)
-  console.log('phone:', normalizedPhone)
-
   try {
     const { data } = await apiClient.post('/auth/register', requestBody)
-
-    // Store token
-    persistToken(data?.token)
-
     return data
   } catch (error) {
     console.error('Error registering user:', error.response?.data || error.message)
     const serverMessage = error.response?.data?.message || 'Unknown signup error.'
     throw new Error(serverMessage)
   }
-}
-
-/**
- * Logs out from the current session and clears the stored token.
- * @param {string} dni
- * @param {string} [token]
- * @returns {Promise<void>}
- */
-export async function logoutSession(dni, token = readStoredToken()) {
-  if (!token) return
-
-  await apiClient.post('/auth/logout', { dni, token })
-  persistToken(null)
-}
-
-/**
- * Validates the current session token with the backend.
- * @param {string} dni
- * @param {string} [token]
- * @returns {Promise<boolean>}
- */
-export async function validateSession(dni, token = readStoredToken()) {
-  if (!token) throw new Error('Missing session token.')
-
-  await apiClient.post('/auth/validate', { dni, token })
-  return true
 }

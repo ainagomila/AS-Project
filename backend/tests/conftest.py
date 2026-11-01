@@ -1,9 +1,14 @@
 import base64
+import secrets
+from datetime import timedelta
 
 import pytest
+from django.utils import timezone
+from oauth2_provider.models import AccessToken, Application
 from rest_framework.test import APIClient
 
 from common import crypto
+from iam.models import User
 
 PASSWORD = "Secret_123"
 PIN = "123456"
@@ -49,7 +54,22 @@ class Actor:
         self.client = APIClient()
         response = self.client.post("/auth/register", register_payload(dni, phone), format="json")
         assert response.status_code == 201, response.content
-        self.token = response.json()["token"]
+        app, _ = Application.objects.get_or_create(
+            client_id="kofre-test-api",
+            defaults={
+                "name": "tests",
+                "client_type": Application.CLIENT_PUBLIC,
+                "authorization_grant_type": Application.GRANT_AUTHORIZATION_CODE,
+                "redirect_uris": "https://localhost:5173/callback",
+            },
+        )
+        self.token = AccessToken.objects.create(
+            user=User.objects.get(dni=dni),
+            application=app,
+            token=secrets.token_urlsafe(32),
+            expires=timezone.now() + timedelta(minutes=5),
+            scope="banking",
+        ).token
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token}")
 
     def url(self, suffix=""):

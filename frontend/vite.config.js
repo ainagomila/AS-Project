@@ -1,10 +1,35 @@
 import { fileURLToPath, URL } from 'node:url'
+import fs from 'node:fs'
 
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
+import path from 'node:path'
 
-const API_PROXY_TARGET = process.env.VITE_API_PROXY_TARGET || 'http://localhost:8080'
+const HTTPS_CERT = process.env.VITE_HTTPS_CERT || '../backend/.certs/localhost.pem'
+const HTTPS_KEY = process.env.VITE_HTTPS_KEY || '../backend/.certs/localhost-key.pem'
+const configuredApiProxyTarget = process.env.VITE_API_PROXY_TARGET
+const ROOT_CA = path.join(path.dirname(HTTPS_CERT), 'rootCA.pem')
+const PROXY_CA = fs.existsSync(ROOT_CA) ? ROOT_CA : HTTPS_CERT
+const certificateFilesExist =
+  fs.existsSync(HTTPS_CERT) && fs.existsSync(HTTPS_KEY)
+const httpsRequested =
+  process.env.VITE_HTTPS === 'true' ||
+  configuredApiProxyTarget?.startsWith('https://') ||
+  (!configuredApiProxyTarget &&
+    process.env.VITE_HTTPS !== 'false' &&
+    certificateFilesExist)
+
+if (httpsRequested && !certificateFilesExist) {
+  throw new Error(
+    `HTTPS is enabled, but the certificate files were not found: ${HTTPS_CERT} and ${HTTPS_KEY}`,
+  )
+}
+
+const httpsEnabled = httpsRequested
+const API_PROXY_TARGET =
+  configuredApiProxyTarget ||
+  (httpsEnabled ? 'https://localhost:8080' : 'http://localhost:8080')
 
 // https://vite.dev/config/
 // TODO: Re‑enable `vite-plugin-vue-devtools` once it is safe to use in the current Node/Vite setup.
@@ -42,10 +67,20 @@ export default defineConfig({
     proxy: {
       '/api': {
         target: API_PROXY_TARGET,
+        secure: httpsEnabled,
+        ...(httpsEnabled ? { ca: fs.readFileSync(PROXY_CA) } : {}),
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
     },
+    ...(httpsEnabled
+      ? {
+          https: {
+            cert: fs.readFileSync(HTTPS_CERT),
+            key: fs.readFileSync(HTTPS_KEY),
+          },
+        }
+      : {}),
   },
 
   test: {

@@ -1,5 +1,6 @@
-﻿import { APIRequestContext } from '@playwright/test'
-import { API_BASE_URL } from './env'
+﻿import { APIRequestContext, request as playwrightRequest } from '@playwright/test'
+import { createHash, randomBytes } from 'node:crypto'
+import { API_BASE_URL, FRONTEND_BASE_URL } from './env'
 
 const DNI_LETTERS = 'TRWAGMYFPDXBNJZSQVHLCKE'
 const IBAN_COUNTRY_CODE = 'ES'
@@ -195,30 +196,88 @@ export function ensurePaymentIdFormat(rawId: string) {
     return trimmed.startsWith('PAY-') ? trimmed : `PAY-${trimmed.replace(/^PAY[-_]?/i, '')}`
 }
 
-export async function fetchAuthToken(request: APIRequestContext, dni: string, password: string) {
+const OAUTH_CLIENT_ID = 'kofre-web'
+
+/**
+ * Signs in through the real OAuth2 flow (Authorization Code + PKCE, like the app) and
+ * returns an access token. It uses its own request context so the Django login cookie
+ * of one user never leaks into the next call. The redirect URI must be the one registered
+ * for the client, so run the tests with E2E_BASE_URL pointing at the frontend origin.
+ */
+export async function fetchAuthToken(_request: APIRequestContext, dni: string, password: string) {
+    const api = await playwrightRequest.newContext({ ignoreHTTPSErrors: true })
     try {
-        const response = await request.post(`${API_BASE_URL}/auth/login`, {
-            data: {
-                dni,
-                password,
-            },
+        const verifier = randomBytes(32).toString('base64url')
+        const challenge = createHash('sha256').update(verifier).digest('base64url')
+        const redirectUri = `${FRONTEND_BASE_URL}/callback`
+        const query = new URLSearchParams({
+            response_type: 'code',
+            client_id: OAUTH_CLIENT_ID,
+            redirect_uri: redirectUri,
+            scope: 'openid banking',
+            code_challenge: challenge,
+            code_challenge_method: 'S256',
+            state: randomBytes(8).toString('hex'),
         })
 
-        if (!response.ok()) {
-            console.warn(`Failed to login for auth token ${dni}: ${response.status()}`)
+        // 1. Not signed in yet: the authorize endpoint sends us to the login page.
+        const toLogin = await api.get(`${API_BASE_URL}/o/authorize/?${query}`, { maxRedirects: 0 })
+        const loginUrl = new URL(toLogin.headers()['location'] ?? '', API_BASE_URL)
+
+        // 2. Load the login form (CSRF cookie + token) and submit the credentials.
+        const loginPage = await api.get(loginUrl.toString())
+        const csrf = /name="csrfmiddlewaretoken" value="([^"]+)"/.exec(await loginPage.text())?.[1]
+        if (!csrf) {
+            console.warn(`CSRF token not found on the login page for ${dni}`)
+            return null
+        }
+        const submitted = await api.post(loginUrl.toString(), {
+            form: {
+                username: dni,
+                password,
+                csrfmiddlewaretoken: csrf,
+                next: loginUrl.searchParams.get('next') ?? '',
+            },
+            headers: { Referer: loginUrl.toString() },
+            maxRedirects: 0,
+        })
+        if (submitted.status() !== 302) {
+            console.warn(`Failed to login for auth token ${dni}: ${submitted.status()}`)
             return null
         }
 
-        const payload = await response.json()
-        if (!payload?.token) {
-            console.warn(`Auth token missing for ${dni}`)
+        // 3. Signed in: authorize now answers with the redirect that carries the code.
+        const authorized = await api.get(
+            new URL(submitted.headers()['location'] ?? '', API_BASE_URL).toString(),
+            { maxRedirects: 0 },
+        )
+        const code = new URL(authorized.headers()['location'] ?? '', API_BASE_URL).searchParams.get('code')
+        if (!code) {
+            console.warn(`Authorization code missing for ${dni}`)
             return null
         }
 
-        return payload.token as string
+        // 4. Exchange the code (and the PKCE verifier) for the tokens.
+        const tokenResponse = await api.post(`${API_BASE_URL}/o/token/`, {
+            form: {
+                grant_type: 'authorization_code',
+                code,
+                redirect_uri: redirectUri,
+                client_id: OAUTH_CLIENT_ID,
+                code_verifier: verifier,
+            },
+        })
+        if (!tokenResponse.ok()) {
+            console.warn(`Token request failed for ${dni}: ${tokenResponse.status()}`)
+            return null
+        }
+        const payload = await tokenResponse.json()
+        return (payload?.access_token as string | undefined) ?? null
     } catch (error) {
         console.warn(`Error obtaining auth token for ${dni}:`, error)
         return null
+    } finally {
+        await api.dispose()
     }
 }
 

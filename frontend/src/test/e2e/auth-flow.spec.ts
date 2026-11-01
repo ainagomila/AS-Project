@@ -26,38 +26,30 @@ test.describe('Authentication flow', () => {
     })
 
     test('rejects login with invalid password', async ({ page, request }) => {
-        autoAcceptDialogs(page)
         const user = buildTestUser()
         await registerUserViaApi(request, user)
         cleanup.registerUser({ dni: user.dni, pin: user.pin, password: user.password })
 
         await page.goto('/login')
-        await page.getByTestId('login-dni-input').fill(user.dni)
-        await page.getByTestId('login-password-input').fill(`${user.password}x`)
+        await page.locator('#id_username').fill(user.dni)
+        await page.locator('#id_password').fill(`${user.password}x`)
+        await page.locator('.login-btn').click()
 
-        const dialogPromise = page.waitForEvent('dialog')
-        await page.getByTestId('login-submit-btn').click()
-        const dialog = await dialogPromise
-        expect(dialog.message()).toMatch(/invalid dni or password|credencials?\s+inv(?:a|\u00E0)lides?/i)
-        await expect(page).toHaveURL(/\/login$/)
+        await expect(page.locator('.error')).toHaveText('Incorrect DNI or password.')
+        await expect(page).toHaveURL(/\/accounts\/login\//)
     })
 
-    test('shows an alert when trying to submit empty credentials', async ({ page }) => {
-        autoAcceptDialogs(page)
+    test('rejects login for an unknown DNI', async ({ page }) => {
         await page.goto('/login')
-        await page.getByTestId('login-dni-input').fill('   ')
-        await page.getByTestId('login-password-input').fill('Secret123')
+        await page.locator('#id_username').fill('00000000T')
+        await page.locator('#id_password').fill('Secret123')
+        await page.locator('.login-btn').click()
 
-        const dialogPromise = page.waitForEvent('dialog')
-        await page.getByTestId('login-submit-btn').click()
-        const dialog = await dialogPromise
-        expect(dialog.message()).toMatch(/enter your credentials|credencials?.*(incompletes?|inv(?:a|\u00E0)lides?)/i)
-        await expect(page).toHaveURL(/\/login$/)
+        await expect(page.locator('.error')).toHaveText('Incorrect DNI or password.')
     })
 
     test('redirects unauthenticated dashboard access to login', async ({ page }) => {
         await page.goto('/dashboard')
-        await expect(page).toHaveURL(/\/login(\?.*)?$/)
+        await expect(page).toHaveURL(/\/accounts\/login\//)
     })
 })
-

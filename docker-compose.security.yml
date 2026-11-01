@@ -1,0 +1,33 @@
+# Security scanner, kept in its OWN compose file so it never touches the
+# application's docker-compose.yml.
+#
+#   docker compose -f docker-compose.security.yml build
+#   docker compose -f docker-compose.security.yml run --rm security-scanner
+#
+# `run` returns the container's exit code, so a failed gate = a failed command
+# (that is what makes the GitHub Action fail).
+services:
+  security-scanner:
+    build:
+      context: ./scripts/vulnscan
+    volumes:
+      - ./:/src:ro                          # the whole repo, READ-ONLY
+      - ./security-reports:/reports         # reports come out here
+      - trivy-cache:/root/.cache/trivy      # keeps Trivy's vulnerability DB between runs
+    environment:
+      # Policy: which severities fail the pipeline (comma separated).
+      FAIL_ON: ${FAIL_ON:-CRITICAL,HIGH}
+      # Findings with no severity (pip-audit) are treated as this severity.
+      TREAT_UNKNOWN_AS: ${TREAT_UNKNOWN_AS:-HIGH}
+      # 1 = a skipped tool (e.g. missing lockfile) also fails the pipeline.
+      STRICT: ${STRICT:-0}
+      # 1 = npm audit only looks at production dependencies.
+      NPM_OMIT_DEV: ${NPM_OMIT_DEV:-1}
+      # Auto-detected if empty. Paths are relative to the repo root.
+      BACKEND_DIR: ${BACKEND_DIR:-}
+      FRONTEND_DIR: ${FRONTEND_DIR:-}
+      REQUIREMENTS_FILE: ${REQUIREMENTS_FILE:-}
+      SEMGREP_RULES: ${SEMGREP_RULES:-p/django p/python p/javascript p/owasp-top-ten}
+
+volumes:
+  trivy-cache:

@@ -249,8 +249,6 @@ onMounted(async () => {
   accountError.value = null
 
   try {
-    userStore.initFromStorage()
-
     if (!userStore.isAuthenticated || !userStore.dni) {
       router.push('/login')
       return
