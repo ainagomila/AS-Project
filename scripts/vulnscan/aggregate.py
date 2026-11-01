@@ -136,7 +136,11 @@ def parse_pip_audit(path: Path):
                 f"{name}=={version}",
                 f"upgrade to {fixes}" if fixes else "no fixed version published yet",
                 vuln.get("aliases") or []))
-    return out, []
+    # pip-audit can list the same advisory twice for a package: keep one of each
+    unique = {}
+    for f in out:
+        unique.setdefault((f["id"], f["location"]), f)
+    return list(unique.values()), []
 
 
 def parse_npm_audit(path: Path):
@@ -334,7 +338,7 @@ def build_markdown(passed, reasons, tool_results, counts, blocking, others, supp
         lines += ["## Findings that fail the gate", "",
                   "| Severity | Tool | ID | Location | Fix | Description |", "|---|---|---|---|---|---|"]
         for f in blocking[:100]:
-            lines.append(f"| {f['severity']} | {f['tool']} | {md(f['id'])} | {md(f['location'])} | "
+            lines.append(f"| {effective_sev(f)} | {f['tool']} | {md(f['id'])} | {md(f['location'])} | "
                          f"{md(f['fix'])} | {md(f['title'])} |")
         if len(blocking) > 100:
             lines.append(f"\n…and {len(blocking) - 100} more (see summary.json)")
@@ -344,7 +348,7 @@ def build_markdown(passed, reasons, tool_results, counts, blocking, others, supp
         lines += ["<details><summary>Other findings (do not fail the gate)</summary>", "",
                   "| Severity | Tool | ID | Location | Description |", "|---|---|---|---|---|"]
         for f in others[:100]:
-            lines.append(f"| {f['severity']} | {f['tool']} | {md(f['id'])} | {md(f['location'])} | {md(f['title'])} |")
+            lines.append(f"| {effective_sev(f)} | {f['tool']} | {md(f['id'])} | {md(f['location'])} | {md(f['title'])} |")
         lines += ["", "</details>", ""]
 
     if suppressed:
@@ -463,7 +467,7 @@ def main() -> int:
     for reason in reasons:
         print(f"  ! {reason}")
     for f in blocking[:30]:
-        print(f"  - [{f['severity']}] {f['tool']}: {f['id']} @ {f['location']}  {f['fix']}")
+        print(f"  - [{effective_sev(f)}] {f['tool']}: {f['id']} @ {f['location']}  {f['fix']}")
     if len(blocking) > 30:
         print(f"  ...and {len(blocking) - 30} more")
     if expired:
