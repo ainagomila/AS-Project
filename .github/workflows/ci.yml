@@ -19,6 +19,9 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_PASSWORD: password
     services:
       db:
         image: postgres:18
@@ -41,20 +44,15 @@ jobs:
           python-version: "3.13"
           enable-cache: true
       - run: uv sync --locked
-      - name: Keys and CI settings
+      - name: Keys
         run: |
           mkdir -p .env.d
           openssl genrsa -out .env.d/oidc.key 2048
-          # settings.py points at the docker-compose host "db"; the service runs on localhost.
-          cat > ci_settings.py <<'EOF'
-          from kofre.settings import *  # noqa: F401,F403
-
-          DATABASES["default"].update({"HOST": "localhost", "PORT": 5432})
-          EOF
-          uv run python manage.py generate_key --settings=ci_settings
-      - run: uv run pytest -q --ds=ci_settings
-      - name: Django deploy check (informational)
-        run: uv run python manage.py check --deploy --settings=ci_settings
+          echo "DJANGO_SECRET_KEY=$(openssl rand -base64 48)" >> "$GITHUB_ENV"
+      - run: uv run python manage.py generate_key
+      - run: uv run pytest -q
+      - name: Django deploy check
+        run: uv run python manage.py check --deploy --fail-level WARNING
 
   frontend:
     runs-on: ubuntu-latest
