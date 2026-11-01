@@ -360,7 +360,6 @@ async function loadAccount() {
   copied.value = false
 
   try {
-    userStore.initFromStorage()
     if (!userStore.isAuthenticated || !userStore.dni) {
       showToast('Inicia sesión para ver tu cuenta', 'error')
       router.push('/login')

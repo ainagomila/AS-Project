@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, vi } from 'vitest'
 
-const REMOTE_API_BASE_URL = 'http://localhost:8080/'
+const REMOTE_API_BASE_URL = 'https://localhost:8080/'
 
 if (typeof import.meta !== 'undefined' && import.meta?.env) {
   import.meta.env.VITE_API_BASE_URL = REMOTE_API_BASE_URL
@@ -79,4 +79,3 @@ beforeEach(() => {
 afterEach(() => {
   localStorage.clear()
 })
-

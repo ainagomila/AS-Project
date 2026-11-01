@@ -133,7 +133,7 @@ def get_owned_card_with_pin(dni, iban, pan, pin):
         raise AppError("USER_NOT_FOUND", "Usuari inexistent!")
     if not has_text(pin):
         raise AppError("INVALID_PIN_FORMAT", "El PIN és obligatori.")
-    if user.pin != pin:
+    if not user.check_pin(pin):
         raise AppError("INVALID_PIN", "El PIN és incorrecte!")
     return _owned_card(user, iban, pan, "El compte no pertany a l'usuari.")
 

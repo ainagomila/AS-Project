@@ -17,23 +17,6 @@ class RegisterView(APIView):
         return Response(body, status=201)
 
 
-class LoginView(APIView):
-    def post(self, request):
-        return Response(services.login(text(request, "dni"), text(request, "password")))
-
-
-class LogoutView(APIView):
-    def post(self, request):
-        services.logout(text(request, "dni"), text(request, "token"))
-        return Response(status=204)
-
-
-class ValidateView(APIView):
-    def post(self, request):
-        services.validate(text(request, "dni"), text(request, "token"))
-        return Response(status=204)
-
-
 class ExistsView(APIView):
     def get(self, request, dni):
         services.exists(dni)
@@ -76,7 +59,7 @@ class UserDetailView(AuthenticatedView):
             prefix, number = services.split_update_phone(phone)
             result = services.update_phone(dni, pin, prefix, number)
         if has_text(password):
-            result = services.update_password(dni, pin, password)
+            result = services.update_password(dni, pin, password, keep_token=request.auth)
         if has_text(new_pin):
             result = services.update_pin(dni, pin, new_pin)
         if result is None:
