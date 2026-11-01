@@ -17,7 +17,7 @@ def test_register_creates_user_and_initial_account(client):
     assert response.status_code == 201
     body = response.json()
     assert body["message"] == "User registered successfully"
-    user = User.objects.get(dni=DNI_A)
+    user = User.objects.get_by_natural_key(DNI_A)
     account = Account.objects.get(user_id=user.id)
     assert (account.name, account.bank, account.currency) == ("Kofre", "Kofre Bank", "EUR")
 
@@ -60,7 +60,7 @@ def test_exists(client, ana):
 def test_reset_password_with_pin(client, ana):
     body = {"dni": DNI_A, "pin": PIN, "newPassword": "Brand_New_1"}
     assert client.post("/auth/reset-password", body, format="json").status_code == 204
-    assert User.objects.get(dni=DNI_A).check_password("Brand_New_1")
+    assert User.objects.get_by_natural_key(DNI_A).check_password("Brand_New_1")
 
     wrong_pin = client.post("/auth/reset-password", {**body, "pin": "000000"}, format="json")
     weak = client.post("/auth/reset-password", {**body, "newPassword": "weak"}, format="json")
@@ -83,7 +83,7 @@ def test_protected_routes_need_a_matching_live_token(client, ana, bob):
 
 def _second_session(user_dni):
     """Another signed-in device of the same user: an access token plus its refresh token."""
-    user = User.objects.get(dni=user_dni)
+    user = User.objects.get_by_natural_key(user_dni)
     app = Application.objects.get(client_id="kofre-test-api")
     access = AccessToken.objects.create(
         user=user, application=app, token="other-device", scope="banking",

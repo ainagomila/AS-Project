@@ -17,7 +17,7 @@ from .models import User
 # ---------------------------------------------------------------- helpers
 
 def find_by_dni(dni):
-    return User.objects.filter(dni=dni).first()
+    return User.objects.find_by_dni(dni)
 
 
 def user_response(user):
@@ -114,7 +114,7 @@ def register(name, dni, email, phone, password, birthdate, gender, pin):
         prefix, number = v.validate_phone(prefix, number)
     except ValueError as exc:
         raise AppError("INVALID_PHONE_FORMAT", str(exc)) from None
-    if User.objects.filter(phone_prefix=prefix, phone_number=number).exists():
+    if User.objects.phone_exists(prefix, number):
         raise AppError("USER_ALREADY_EXISTS", "Ja existeix un usuari amb el telèfon indicat")
 
     try:
@@ -123,7 +123,7 @@ def register(name, dni, email, phone, password, birthdate, gender, pin):
         user.set_password(v.validate_password(password))
         user.set_pin(v.validate_user_pin(pin))
         user.dni = v.validate_dni(dni)
-        user.phone_prefix, user.phone_number = prefix, number
+        user.set_phone(prefix, number)
         user.email = v.validate_email(email)
         user.birthdate = v.validate_birthdate(birthdate)
         user.gender = v.validate_gender(gender)
@@ -194,7 +194,7 @@ def update_phone(dni, pin, prefix, number):
         raise AppError("APPLICATION_ERROR", "Cal informar 'prefix' i 'number' per actualitzar.")
     if (prefix, number) != (user.phone_prefix, user.phone_number):
         try:
-            user.phone_prefix, user.phone_number = v.validate_phone(prefix, number)
+            user.set_phone(*v.validate_phone(prefix, number))
         except ValueError as exc:
             raise AppError("INVALID_PHONE_FORMAT", str(exc)) from None
     user.save()

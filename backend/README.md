@@ -25,6 +25,11 @@ expects that port.
 The field-encryption key can also be given as `SECURITY_ENCRYPTION_KEY_BASE64`
 (32 random bytes, base64). See `.env.example`.
 
+DNI, email, phone number, PAN and card PIN are stored as AES-256-GCM
+`v1:<key id>:<nonce>:<ciphertext>`, bound to `<table>.<column>.<row id>` as
+associated data. DNI, phone and PAN lookups use an HMAC-SHA256 blind index under a
+separate key. `generate_key --rotate` adds a new current key; old values still decrypt.
+
 The Docker startup script installs `mkcert` when necessary, then creates and
 trusts the local certificate before starting the containers.
 

@@ -30,12 +30,12 @@ def test_patch_email_phone_password_pin(ana):
 
     password = ana.client.patch(ana.url(), {"pin": PIN, "password": "Other_Pass_9"}, format="json")
     assert password.status_code == 200
-    #assert User.objects.get(dni=DNI_A).password == "Other_Pass_9"
-    assert User.objects.get(dni=DNI_A).check_password("Other_Pass_9") 
+    #assert User.objects.get_by_natural_key(DNI_A).password == "Other_Pass_9"
+    assert User.objects.get_by_natural_key(DNI_A).check_password("Other_Pass_9") 
 
     pin = ana.client.patch(ana.url(), {"pin": PIN, "newPin": "654321"}, format="json")
     assert pin.status_code == 200
-    assert User.objects.get(dni=DNI_A).check_pin("654321")
+    assert User.objects.get_by_natural_key(DNI_A).check_pin("654321")
 
 
 def test_patch_errors(ana):
@@ -72,8 +72,8 @@ def test_delete_user(ana):
         422,
         {"code": "INVALID_PIN", "message": "El PIN és incorrecte!", "metadata": {}},
     )
-    user_id = User.objects.get(dni=DNI_A).id
+    user_id = User.objects.get_by_natural_key(DNI_A).id
     assert ana.client.delete(ana.url(), {"pin": PIN}, format="json").status_code == 204
-    assert not User.objects.filter(dni=DNI_A).exists()
+    assert not User.objects.find_by_dni(DNI_A)
     assert not AccessToken.objects.filter(user_id=user_id).exists()
     assert Account.objects.filter(user_id=user_id).count() == 1

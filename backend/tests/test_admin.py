@@ -32,7 +32,7 @@ def test_non_admin_is_refused_everywhere(ana, bob):
         ana.client.patch(f"/admin/users/{DNI_B}", {"active": False}, format="json"),
     ]
     assert [(r.status_code, r.json()["code"]) for r in responses] == [(403, "FORBIDDEN")] * 4
-    assert User.objects.get(dni=DNI_B).is_active
+    assert User.objects.get_by_natural_key(DNI_B).is_active
 
 
 def test_admin_routes_need_a_token(client, bob):

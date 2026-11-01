@@ -10,7 +10,7 @@ class Command(BaseCommand):
         parser.add_argument("dni")
 
     def handle(self, *args, dni, **options):
-        user = User.objects.filter(dni=dni).first()
+        user = User.objects.find_by_dni(dni)
         if user is None:
             raise CommandError(f"No user with DNI {dni}. Register the user first.")
         user.is_admin = True
