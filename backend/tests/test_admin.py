@@ -28,7 +28,7 @@ def auditor(db):
 
 
 def user_id(dni):
-    return User.objects.get(dni=dni).id
+    return User.objects.get_by_natural_key(dni).id
 
 
 def account_id(dni):
@@ -73,7 +73,7 @@ def test_customers_are_refused_everywhere_in_the_back_office(ana, bob):
         ana.client.get("/admin/users/does-not-exist/accounts"),
     ]
     assert [(r.status_code, r.json()["code"]) for r in responses] == [(403, "FORBIDDEN")] * 6
-    assert User.objects.get(dni=DNI_B).is_active
+    assert User.objects.get_by_natural_key(DNI_B).is_active
 
 
 def test_back_office_needs_a_token(client, bob):
@@ -104,7 +104,7 @@ def test_admin_disables_and_enables_a_customer(admin, bob):
 
     admin.client.patch(f"/admin/users/{target}", {"active": True}, format="json")
     assert bob.client.get(bob.url()).status_code == 401
-    assert User.objects.get(dni=DNI_B).is_active
+    assert User.objects.get_by_natural_key(DNI_B).is_active
 
 
 def test_admin_cannot_disable_staff_or_themselves(admin, bob, auditor):
@@ -112,7 +112,7 @@ def test_admin_cannot_disable_staff_or_themselves(admin, bob, auditor):
     for dni in (DNI_A, DNI_B, DNI_C):
         response = admin.client.patch(f"/admin/users/{user_id(dni)}", {"active": False}, format="json")
         assert (response.status_code, response.json()["code"]) == (403, "FORBIDDEN")
-        assert User.objects.get(dni=dni).is_active
+        assert User.objects.get_by_natural_key(dni).is_active
 
 
 def test_admin_does_not_see_money(admin, bob):
@@ -158,7 +158,7 @@ def test_auditor_follows_the_money_pseudonymised(auditor, ana, bob):
 def test_auditor_changes_nothing(auditor, bob):
     response = auditor.client.patch(f"/admin/users/{user_id(DNI_B)}", {"active": False}, format="json")
     assert (response.status_code, response.json()["code"]) == (403, "FORBIDDEN")
-    assert User.objects.get(dni=DNI_B).is_active
+    assert User.objects.get_by_natural_key(DNI_B).is_active
 
 
 def test_auditor_cannot_reach_an_account_through_another_user(auditor, ana, bob):
@@ -206,7 +206,7 @@ def test_audit_events_are_append_only(ana, bob):
 # ------------------------------------------------------------------ session conditions
 
 def test_disabled_user_is_refused_even_with_a_live_token(ana):
-    User.objects.filter(dni=DNI_A).update(is_active=False)
+    User.objects.filter(pk=user_id(DNI_A)).update(is_active=False)
     response = ana.client.get(ana.url())
     assert (response.status_code, response.json()["code"]) == (403, "USER_DISABLED")
 

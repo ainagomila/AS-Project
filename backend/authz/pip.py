@@ -56,7 +56,7 @@ def _account_attributes(iban):
 
 
 def _card_attributes(pan):
-    card = Card.objects.filter(pan=pan).first()
+    card = Card.objects.find_by_pan(pan)
     if card is None:
         return {}
     account = Account.objects.filter(id=card.account_id).first()

@@ -70,7 +70,6 @@ test.describe.serial('Dashboard workflows', () => {
         await page.getByTestId('add-account-iban-input').fill(iban)
         await page.getByTestId('add-account-name-input').fill(accountName)
         await page.getByTestId('add-account-bank-input').fill('Kofre Test Bank')
-        await page.getByTestId('add-account-balance-input').fill('1000')
         await page.getByTestId('add-account-currency-select').selectOption('EUR')
 
         await page.getByTestId('add-account-submit-btn').click()

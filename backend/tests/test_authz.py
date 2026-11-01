@@ -141,6 +141,8 @@ def _api_views(patterns, prefix=""):
                 continue  # the OAuth endpoints protect themselves
             yield from _api_views(entry.url_patterns, prefix + str(entry.pattern))
         elif isinstance(entry, URLPattern) and hasattr(entry.callback, "view_class"):
+            if str(entry.pattern) == "accounts/login/":
+                continue  # the OAuth login page is a Django form, not an API view
             yield prefix + str(entry.pattern), entry.callback.view_class
 
 
@@ -155,4 +157,4 @@ def test_every_api_route_goes_through_the_policy():
         methods = {m.upper() for m in ("get", "post", "patch", "put", "delete") if hasattr(view, m)}
         assert methods <= set(view.actions), (route, methods - set(view.actions))
         checked += 1
-    assert checked == 19  # update when adding an endpoint
+    assert checked == 18  # update when adding an endpoint

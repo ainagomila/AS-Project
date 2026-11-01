@@ -1,16 +1,37 @@
-"""Django settings for the Kofre backend (local development only)."""
+"""Django settings for the Kofre backend."""
 
 import os
+import sys
 from pathlib import Path
 
 from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Signs the login session and CSRF cookies: set DJANGO_SECRET_KEY outside development.
-SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "django-insecure-kofre-local-development-key")
-DEBUG = True
-ALLOWED_HOSTS = ["*"]
+
+def _env(name, default):
+    return os.environ.get(name) or default
+
+
+def _env_list(name, default):
+    return [v.strip() for v in _env(name, default).split(",") if v.strip()]
+
+
+DEBUG = _env("DJANGO_DEBUG", "").lower() in ("1", "true", "yes", "on")
+# Development (DEBUG) and the test suite may fall back to the committed dev values.
+DEV = DEBUG or "pytest" in sys.modules
+
+
+def _secret(name, dev_default):
+    value = _env(name, dev_default if DEV else None)
+    if value:
+        return value
+    raise ImproperlyConfigured(f"Set {name} (only DJANGO_DEBUG=1 has a development default).")
+
+
+# Signs the login session and CSRF cookies.
+SECRET_KEY = _secret("DJANGO_SECRET_KEY", "django-insecure-kofre-local-development-key")
+ALLOWED_HOSTS = _env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,[::1],backend")
 AUTH_USER_MODEL = "iam.User"
 
 INSTALLED_APPS = [
@@ -28,6 +49,8 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    "django.middleware.security.SecurityMiddleware",
+    "common.csp.ContentSecurityPolicyMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -57,11 +80,11 @@ APPEND_SLASH = False
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": "kofredb",
-        "USER": "user",
-        "PASSWORD": "password",
-        "HOST": "db",
-        "PORT": 5432
+        "NAME": _env("POSTGRES_DB", "kofredb"),
+        "USER": _env("POSTGRES_USER", "user"),
+        "PASSWORD": _secret("POSTGRES_PASSWORD", "password"),
+        "HOST": _env("POSTGRES_HOST", "db"),
+        "PORT": int(_env("POSTGRES_PORT", "5432")),
     }
 }
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
@@ -80,6 +103,7 @@ REST_FRAMEWORK = {
     "UNAUTHENTICATED_USER": None,
     "UNAUTHENTICATED_TOKEN": None,
     "COERCE_DECIMAL_TO_STRING": False,
+    "DEFAULT_THROTTLE_CLASSES": ["common.lockout.PinLockout"],
 }
 
 # Same behaviour as the original WebConfig: listed origins with credentials.
@@ -154,3 +178,17 @@ SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_AGE = 60  # only needed during login; renewing uses the refresh token
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 CSRF_COOKIE_SECURE = True
+CSRF_COOKIE_HTTPONLY = True
+
+# Browser security headers (SecurityMiddleware, XFrameOptionsMiddleware, common.csp).
+SECURE_SSL_REDIRECT = not DEV  # the server only speaks HTTPS; this guards plain-HTTP requests
+SECURE_HSTS_SECONDS = int(_env("DJANGO_HSTS_SECONDS", "0" if DEV else "31536000"))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+SECURE_HSTS_PRELOAD = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = "same-origin"  # "no-referrer" would make the login form send Origin: null
+X_FRAME_OPTIONS = "DENY"
+
+# Lockout after wrong PINs or login passwords, per (DNI, client IP). See common/lockout.py.
+LOCKOUT_MAX_FAILURES = 5
+LOCKOUT_WINDOW_SECONDS = 15 * 60

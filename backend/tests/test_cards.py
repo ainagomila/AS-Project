@@ -48,9 +48,9 @@ def test_create_card(ana, card):
         "status": "ACTIVE",
         "expiryDate": "05/29",
     }
-    stored = Card.objects.get(pan=PAN)
-    assert stored.pin == "1234"
-    assert "1234" not in stored.pin_ciphertext
+    stored = Card.objects.find_by_pan(NEW["pan"])
+    assert (stored.pan, stored.pin) == (PAN, "1234")
+    assert PAN not in stored.pan_enc and "1234" not in stored.pin_enc
 
 
 def test_lists_and_detail(ana, card):
@@ -94,13 +94,10 @@ def test_update_alias_and_status(ana, card):
     assert (invalid.status_code, invalid.json()["code"]) == (422, "APPLICATION_ERROR")
 
 
-def test_verify_card_returns_secrets_for_the_user_pin(ana, card):
+def test_verify_card_never_returns_the_card_pin_or_cvv(ana, card):
     url = ana.url(f"/accounts/{card[0]}/cards/{PAN}/security/verify-card")
     ok = ana.client.post(url, {"pin": PIN}, format="json")
-    assert (ok.status_code, ok.json()) == (
-        200,
-        {"pan": PAN, "expireDate": "05/29", "pin": "1234"},
-    )
+    assert (ok.status_code, ok.json()) == (200, {"pan": PAN, "expireDate": "05/29"})
     wrong = ana.client.post(url, {"pin": "000000"}, format="json")
     missing = ana.client.post(url, {}, format="json")
     assert (wrong.status_code, wrong.json()["code"]) == (422, "INVALID_PIN")

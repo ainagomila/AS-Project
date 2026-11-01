@@ -11,6 +11,8 @@ from django.http import Http404
 from rest_framework import exceptions as drf_exceptions
 from rest_framework.response import Response
 
+from . import lockout
+
 NOT_FOUND = {"USER_NOT_FOUND", "ACCOUNT_NOT_FOUND", "CARD_NOT_FOUND", "BANK_NOT_FOUND"}
 CONFLICT = {
     "USER_ALREADY_EXISTS",
@@ -80,6 +82,11 @@ class BareUnauthorized(Exception):
 
 
 def exception_handler(exc, context):
+    if isinstance(exc, AppError) and exc.code == "INVALID_PIN":
+        lockout.record_failure(lockout.pin_key(context["request"], context["kwargs"]))
+    if isinstance(exc, drf_exceptions.Throttled):
+        message = "Massa intents. Torna-ho a provar més tard."
+        return Response({"code": "TOO_MANY_ATTEMPTS", "message": message, "metadata": {}}, status=429)
     if isinstance(exc, AppError):
         return Response(
             {"code": exc.code, "message": exc.message, "metadata": exc.metadata},

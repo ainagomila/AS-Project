@@ -3,6 +3,7 @@ import secrets
 from datetime import timedelta
 
 import pytest
+from django.core.cache import cache
 from django.utils import timezone
 from oauth2_provider.models import AccessToken, Application
 from rest_framework.test import APIClient
@@ -21,9 +22,14 @@ DNI_B = "87654321X"
 def encryption_key(settings):
     settings.SECURITY_ENCRYPTION_KEY_FILE = ""
     settings.SECURITY_ENCRYPTION_KEY_BASE64 = base64.b64encode(b"k" * 32).decode()
-    crypto._key.cache_clear()
+    crypto._keyring.cache_clear()
     yield
-    crypto._key.cache_clear()
+    crypto._keyring.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def clear_lockouts():
+    cache.clear()
 
 
 @pytest.fixture
@@ -64,7 +70,7 @@ class Actor:
             },
         )
         self.token = AccessToken.objects.create(
-            user=User.objects.get(dni=dni),
+            user=User.objects.get_by_natural_key(dni),
             application=app,
             token=secrets.token_urlsafe(32),
             expires=timezone.now() + timedelta(minutes=5),

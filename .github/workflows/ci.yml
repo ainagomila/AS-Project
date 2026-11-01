@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_PASSWORD: password
+    services:
+      db:
+        image: postgres:18
+        env:
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: kofredb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U user -d kofredb"
+          --health-interval 2s --health-timeout 5s --health-retries 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.12.24"
+          python-version: "3.13"
+          enable-cache: true
+      - run: uv sync --locked
+      - name: Keys
+        run: |
+          mkdir -p .env.d
+          openssl genrsa -out .env.d/oidc.key 2048
+          echo "DJANGO_SECRET_KEY=$(openssl rand -base64 48)" >> "$GITHUB_ENV"
+      - run: uv run python manage.py generate_key
+      - run: uv run pytest -q
+      - name: Django deploy check
+        run: uv run python manage.py check --deploy --fail-level WARNING
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      # Integration and browser tests need a running backend.
+      - run: npx vitest run --exclude 'src/test/integration/**' --exclude 'src/test/e2e/**'
+
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # gitleaks scans the whole history
+          persist-credentials: false
+      - run: docker compose -f docker-compose.security.yml build
+      - run: docker compose -f docker-compose.security.yml run --rm security-scanner
+      - if: always() && hashFiles('security-reports/summary.md') != ''
+        run: cat security-reports/summary.md >> "$GITHUB_STEP_SUMMARY"
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: security-reports
+          path: security-reports/

@@ -1,7 +1,9 @@
 services:
   frontend:
-    build: 
+    build:
       context: ./frontend
+      args:
+        UID: ${KOFRE_UID:-1000}
     container_name: kofre_frontend
     environment:
       VITE_API_PROXY_TARGET: https://backend:8080
@@ -21,6 +23,8 @@ services:
   backend:
     build:
       context: ./backend
+      args:
+        UID: ${KOFRE_UID:-1000}
     container_name: kofre_backend
     ports:
       - "8080:8080"
@@ -29,6 +33,11 @@ services:
       - /app/.venv
     environment:
       VERIFIER_URL: http://verifier:5678
+      # Generated into .env by scripts/start-docker.*
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?set DJANGO_SECRET_KEY in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-0}
+      DJANGO_HSTS_SECONDS: ${DJANGO_HSTS_SECONDS:-31536000}
     networks:
       - default
       - verifier_net
@@ -53,7 +62,7 @@ services:
     container_name: kofre_db
     environment:
       POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: kofredb
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "user", "-d", "kofredb"]

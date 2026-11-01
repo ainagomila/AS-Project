@@ -66,7 +66,7 @@ def list_accounts(dni):
     return {"accounts": [account_response(a) for a in Account.objects.filter(user_id=user.id)]}
 
 
-def add_account(dni, iban, name, bank, balance, currency):
+def add_account(dni, iban, name, bank, currency):
     user = find_by_dni(dni)
     if user is None:
         raise AppError("USER_NOT_FOUND", "Usuari inexistent")
@@ -79,11 +79,6 @@ def add_account(dni, iban, name, bank, balance, currency):
     if find_by_iban(iban) is not None:
         raise AppError("ACCOUNT_ALREADY_EXISTS", "El compte ja existeix")
 
-    # The opening balance is whatever the client sends.
-    balance = Decimal("0") if balance is None else Decimal(str(balance))
-    if balance < 0:
-        raise AppError("DOMAIN_ERROR", "El saldo no pot ser negatiu")
-
     # Not caught in the original either: a missing or unknown currency is a 500.
     if not has_text(currency):
         raise ValueError("El 'currency' d'Account ha de tenir un valor diferent a null o blank!")
@@ -91,7 +86,7 @@ def add_account(dni, iban, name, bank, balance, currency):
         id=ids.generate("ACC"),
         name=name,
         bank=bank,
-        balance=v.money_amount(balance),
+        balance=Decimal("0.00"),  # new accounts open empty; a client balance is ignored
         currency=v.validate_currency(currency),
         iban=v.validate_iban(iban),
         user_id=user.id,

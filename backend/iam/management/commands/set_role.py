@@ -11,7 +11,7 @@ class Command(BaseCommand):
         parser.add_argument("role", choices=[name for name, _ in ROLES])
 
     def handle(self, *args, dni, role, **options):
-        user = User.objects.filter(dni=dni).first()
+        user = User.objects.find_by_dni(dni)
         if user is None:
             raise CommandError(f"No user with DNI {dni}. Register the user first.")
         user.role = role

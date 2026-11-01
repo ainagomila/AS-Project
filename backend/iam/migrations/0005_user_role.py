@@ -14,7 +14,7 @@ def role_to_admins(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("iam", "0003_hash_user_pin"),
+        ("iam", "0004_encrypt_personal_data"),
     ]
 
     operations = [

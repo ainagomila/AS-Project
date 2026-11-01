@@ -35,7 +35,7 @@ def card_response(card, iban):
 
 
 def find_by_pan(pan):
-    return Card.objects.filter(pan=pan).first()
+    return Card.objects.find_by_pan(pan)
 
 
 def parse_expire_date(raw):
@@ -247,8 +247,5 @@ def verify_card(dni, iban, pan, pin):
     if not has_text(pin):
         raise AppError("INVALID_PIN_FORMAT", "El PIN és obligatori per a verificar la targeta!")
     card = get_owned_card_with_pin(dni, iban, pan, pin)
-    return {
-        "pan": card.pan,
-        "expireDate": card.expire_date_card_format,
-        "pin": card.pin,
-    }
+    # The card PIN and the CVV are never returned.
+    return {"pan": card.pan, "expireDate": card.expire_date_card_format}

@@ -24,14 +24,6 @@ class RegisterView(PublicView):
         return Response(body, status=201)
 
 
-class ExistsView(PublicView):
-    actions = {"GET": "check-dni"}
-
-    def get(self, request, dni):
-        services.exists(dni)
-        return Response(True)
-
-
 class ResetPasswordView(PublicView):
     actions = {"POST": "reset-password"}
 

@@ -6,7 +6,7 @@
   <title>Kofre · Log in</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
-  <style>
+  <style nonce="{{ request.csp_nonce }}">
     * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Open Sans', sans-serif; }
     body { min-height: 100vh; background: #171717; color: #fff; }
 
@@ -71,7 +71,9 @@
         <input type="hidden" name="next" value="{{ next }}">
         <h2>Log in</h2>
 
-        {% if form.errors %}
+        {% if locked %}
+          <p class="error">Too many failed attempts. Try again later.</p>
+        {% elif form.errors %}
           <p class="error">Incorrect DNI or password.</p>
         {% endif %}
 
@@ -101,7 +103,7 @@
     </div>
   </main>
 
-  <script>
+  <script nonce="{{ request.csp_nonce }}">
     var toggle = document.getElementById('toggle-password');
     var field = document.getElementById('id_password');
     toggle.addEventListener('click', function () {

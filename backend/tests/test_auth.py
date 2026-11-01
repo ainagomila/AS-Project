@@ -16,8 +16,8 @@ def test_register_creates_user_and_initial_account(client):
     response = client.post("/auth/register", register_payload(), format="json")
     assert response.status_code == 201
     body = response.json()
-    assert body["message"] == "User registered successfully"
-    user = User.objects.get(dni=DNI_A)
+    assert body["message"] == "Registration received. Log in to continue."
+    user = User.objects.get_by_natural_key(DNI_A)
     account = Account.objects.get(user_id=user.id)
     assert (account.name, account.bank, account.currency) == ("Kofre", "Kofre Bank", "EUR")
 
@@ -43,31 +43,32 @@ def test_register_validation_errors(client, overrides, status, code):
     assert set(response.json()) == {"code", "message", "metadata"}
 
 
-def test_register_duplicates(client, ana):
+def test_register_duplicates_get_the_same_answer_as_a_new_user(client, ana):
+    new = client.post("/auth/register", register_payload(DNI_B, "+34622222222"), format="json")
+    User.objects.get_by_natural_key(DNI_B).delete()
     same_dni = client.post("/auth/register", register_payload(phone="+34611111111"), format="json")
     same_phone = client.post("/auth/register", register_payload(dni=DNI_B), format="json")
-    assert (same_dni.status_code, same_dni.json()["code"]) == (409, "USER_ALREADY_EXISTS")
-    assert (same_phone.status_code, same_phone.json()["code"]) == (409, "USER_ALREADY_EXISTS")
+    assert (same_dni.status_code, same_dni.json()) == (new.status_code, new.json())
+    assert (same_phone.status_code, same_phone.json()) == (new.status_code, new.json())
+    assert User.objects.count() == 1
+    assert User.objects.get_by_natural_key(DNI_A).phone == "+34600123456"
 
 
-def test_exists(client, ana):
-    found = client.get(f"/auth/exists/{DNI_A}")
-    assert (found.status_code, found.json()) == (200, True)
-    missing = client.get(f"/auth/exists/{DNI_B}")
-    assert (missing.status_code, missing.json()["code"]) == (404, "USER_NOT_FOUND")
+def test_exists_endpoint_is_gone(client, ana):
+    assert client.get(f"/auth/exists/{DNI_A}").status_code == 404
 
 
 def test_reset_password_with_pin(client, ana):
     body = {"dni": DNI_A, "pin": PIN, "newPassword": "Brand_New_1"}
     assert client.post("/auth/reset-password", body, format="json").status_code == 204
-    assert User.objects.get(dni=DNI_A).check_password("Brand_New_1")
+    assert User.objects.get_by_natural_key(DNI_A).check_password("Brand_New_1")
 
     wrong_pin = client.post("/auth/reset-password", {**body, "pin": "000000"}, format="json")
     weak = client.post("/auth/reset-password", {**body, "newPassword": "weak"}, format="json")
     unknown = client.post("/auth/reset-password", {**body, "dni": DNI_B}, format="json")
     assert (wrong_pin.status_code, wrong_pin.json()["code"]) == (422, "INVALID_PIN")
     assert (weak.status_code, weak.json()["code"]) == (400, "INVALID_PASSWORD_FORMAT")
-    assert (unknown.status_code, unknown.json()["code"]) == (404, "USER_NOT_FOUND")
+    assert (unknown.status_code, unknown.json()) == (wrong_pin.status_code, wrong_pin.json())
 
 
 def test_protected_routes_need_a_matching_live_token(client, ana, bob):
@@ -83,7 +84,7 @@ def test_protected_routes_need_a_matching_live_token(client, ana, bob):
 
 def _second_session(user_dni):
     """Another signed-in device of the same user: an access token plus its refresh token."""
-    user = User.objects.get(dni=user_dni)
+    user = User.objects.get_by_natural_key(user_dni)
     app = Application.objects.get(client_id="kofre-test-api")
     access = AccessToken.objects.create(
         user=user, application=app, token="other-device", scope="banking",

@@ -68,6 +68,34 @@ export async function fetchLatestTransferPaymentId(
     return ensurePaymentIdFormat(paymentId)
 }
 
+// New accounts open at 0, so tests fund them from the user's registration account.
+export async function fundAccountViaApi(
+    request: APIRequestContext,
+    credentials: TestUserCredentials,
+    accountIban: string,
+    amount: number,
+) {
+    const token = await fetchAuthToken(request, credentials.dni, credentials.password)
+    const headers = { Authorization: `Bearer ${token}` }
+    const userUrl = `${API_BASE_URL}/users/${encodeURIComponent(credentials.dni)}`
+    const accounts = (await (await request.get(`${userUrl}/accounts`, { headers })).json()).accounts
+    const source = accounts.find((a) => a.iban !== normaliseIban(accountIban))
+    const response = await request.post(`${userUrl}/accounts/${source.iban}/transfers`, {
+        headers,
+        data: {
+            beneficiary: 'E2E funding',
+            destinationIban: normaliseIban(accountIban),
+            amount,
+            currency: 'EUR',
+            concept: 'E2E funding',
+            pin: credentials.pin,
+        },
+    })
+    if (!response.ok()) {
+        throw new Error(`Funding transfer failed: ${response.status()}`)
+    }
+}
+
 export function trackPaymentIfPresent(handle: UserCleanupHandle, accountIban: string, paymentId: string) {
     const formatted = ensurePaymentIdFormat(paymentId)
     if (!formatted) {
