@@ -55,5 +55,9 @@ mkcert -cert-file .certs/localhost.pem -key-file .certs/localhost-key.pem localh
 cp "$(mkcert -CAROOT)/rootCA.pem" .certs/rootCA.pem
 
 cd "$PROJECT_ROOT"
+if ! grep -qs '^VERIFIER_SECRET_KEY=' .env; then
+  echo "Generating VERIFIER_SECRET_KEY in .env..."
+  echo "VERIFIER_SECRET_KEY=$(openssl rand -hex 32)" >> .env
+fi
 echo "Starting Docker Compose..."
 docker compose up --build
