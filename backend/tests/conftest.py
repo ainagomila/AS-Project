@@ -3,6 +3,7 @@ import secrets
 from datetime import timedelta
 
 import pytest
+from django.core.cache import cache
 from django.utils import timezone
 from oauth2_provider.models import AccessToken, Application
 from rest_framework.test import APIClient
@@ -24,6 +25,11 @@ def encryption_key(settings):
     crypto._key.cache_clear()
     yield
     crypto._key.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def clear_lockouts():
+    cache.clear()
 
 
 @pytest.fixture

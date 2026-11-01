@@ -17,12 +17,6 @@ class RegisterView(APIView):
         return Response(body, status=201)
 
 
-class ExistsView(APIView):
-    def get(self, request, dni):
-        services.exists(dni)
-        return Response(True)
-
-
 class ResetPasswordView(APIView):
     def post(self, request):
         services.update_password(

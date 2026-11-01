@@ -6,8 +6,6 @@ const DEV_API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
 const PROD_API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://localhost:8080'
 const API_BASE_URL = import.meta.env.DEV ? DEV_API_BASE : PROD_API_BASE
 
-console.log('[apiClient] BASE URL →', API_BASE_URL)
-
 const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',

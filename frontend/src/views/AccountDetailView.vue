@@ -299,23 +299,10 @@ function toggleOnlyNeg() {
  */
 async function loadMovements() {
   if (!userStore.isAuthenticated || !userStore.dni || !account.value.iban) {
-    console.log('Missing required data:', {
-      authenticated: userStore.isAuthenticated,
-      dni: userStore.dni,
-      iban: account.value.iban,
-    })
     return
   }
 
   try {
-    console.log('Loading movements for:', {
-      dni: userStore.dni,
-      accountId: account.value.id,
-      iban: account.value.iban,
-      query: query.value,
-      onlyExpenses: onlyExpenses.value,
-    })
-
     const ibanClean = account.value.iban.replace(/\s+/g, '')
 
     // Siempre cargamos transferencias de esta cuenta
@@ -337,7 +324,7 @@ async function loadMovements() {
       (a, b) => new Date(b.date) - new Date(a.date),
     )
   } catch (e) {
-    console.error('Failed to load movements:', e)
+    console.error('Failed to load movements:', e?.message)
     showToast('No se pudieron cargar los movimientos', 'error')
     transactions.value = []
   }
@@ -383,7 +370,7 @@ async function loadAccount() {
 
     await loadMovements()
   } catch (e) {
-    console.error(e)
+    console.error(e?.message)
     error.value = 'No se pudo cargar la cuenta'
     showToast('No se pudo cargar la cuenta', 'error')
   } finally {
@@ -424,7 +411,7 @@ async function saveName() {
     editingName.value = false
     showToast('Alias actualizado', 'success')
   } catch (e) {
-    console.error(e)
+    console.error(e?.message)
     showToast('No se pudo actualizar el alias', 'error')
   } finally {
     savingName.value = false
@@ -491,7 +478,7 @@ async function confirmDelete() {
     showToast('Cuenta eliminada', 'success')
     router.push('/dashboard')
   } catch (e) {
-    console.error(e)
+    console.error(e?.message)
     showToast('Incorrect PIN. Could not delete the account.', 'error')
   } finally {
     deleting.value = false
