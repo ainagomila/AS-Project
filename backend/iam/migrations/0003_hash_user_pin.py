@@ -7,7 +7,7 @@ from common import crypto
 def hash_existing_pins(apps, schema_editor):
     User = apps.get_model("iam", "User")
     for user in User.objects.all():
-        plain = crypto.decrypt(user.pin_iv, user.pin_ciphertext, user.pin_tag)
+        plain = crypto.decrypt_legacy(user.pin_iv, user.pin_ciphertext, user.pin_tag)
         user.pin = make_password(plain)
         user.save(update_fields=["pin"])
 

@@ -18,7 +18,7 @@ from .models import User
 # ---------------------------------------------------------------- helpers
 
 def find_by_dni(dni):
-    return User.objects.filter(dni=dni).first()
+    return User.objects.find_by_dni(dni)
 
 
 def user_response(user):
@@ -119,7 +119,7 @@ def register(name, dni, email, phone, password, birthdate, gender, pin):
         user.set_password(v.validate_password(password))
         user.set_pin(v.validate_user_pin(pin))
         user.dni = v.validate_dni(dni)
-        user.phone_prefix, user.phone_number = prefix, number
+        user.set_phone(prefix, number)
         user.email = v.validate_email(email)
         user.birthdate = v.validate_birthdate(birthdate)
         user.gender = v.validate_gender(gender)
@@ -129,7 +129,7 @@ def register(name, dni, email, phone, password, birthdate, gender, pin):
     # A taken DNI or phone gets the same answer as a new user (after the same password
     # and PIN hashing), so registration cannot be used to find out who is a customer.
     taken = User.objects.filter(
-        Q(dni=user.dni) | Q(phone_prefix=prefix, phone_number=number)
+        Q(dni_index=user.dni_index) | Q(phone_index=user.phone_index)
     ).exists()
     if taken:
         return REGISTERED
@@ -192,7 +192,7 @@ def update_phone(dni, pin, prefix, number):
         raise AppError("APPLICATION_ERROR", "Cal informar 'prefix' i 'number' per actualitzar.")
     if (prefix, number) != (user.phone_prefix, user.phone_number):
         try:
-            user.phone_prefix, user.phone_number = v.validate_phone(prefix, number)
+            user.set_phone(*v.validate_phone(prefix, number))
         except ValueError as exc:
             raise AppError("INVALID_PHONE_FORMAT", str(exc)) from None
     user.save()

@@ -35,6 +35,11 @@ DJANGO_SECRET_KEY="$(openssl rand -base64 48)" POSTGRES_PASSWORD=x \
   DJANGO_ALLOWED_HOSTS=localhost uv run python manage.py check --deploy
 ```
 
+DNI, email, phone number, PAN and card PIN are stored as AES-256-GCM
+`v1:<key id>:<nonce>:<ciphertext>`, bound to `<table>.<column>.<row id>` as
+associated data. DNI, phone and PAN lookups use an HMAC-SHA256 blind index under a
+separate key. `generate_key --rotate` adds a new current key; old values still decrypt.
+
 The Docker startup script installs `mkcert` when necessary, then creates and
 trusts the local certificate before starting the containers.
 

@@ -124,8 +124,8 @@
 
                   <div class="card-bottom sensitive-info">
                     <div class="info-field">
-                      <div class="label">PIN</div>
-                      <div class="value">{{ card.pin }}</div>
+                      <div class="label">Expires</div>
+                      <div class="value">{{ expiryDate }}</div>
                     </div>
                   </div>
 
@@ -325,7 +325,6 @@ const card = ref({
   last4: cardPan.slice(-4),
   bank: '',
   alias: '',
-  pin: '******', // añadido para poder mostrarlo al desbloquear
 })
 
 // --- Datos derivados ---
@@ -610,8 +609,6 @@ async function verifyUnlockPin() {
     card.value.last4 = data.pan.slice(-4)
     card.value.type = data.type || card.value.type
     card.value.bank = data.bank || card.value.bank
-    card.value.pin = data.pin
-
 
     if (data.expireDate) {
       expiryDate.value = parseExpireDate(data.expireDate)

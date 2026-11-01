@@ -22,9 +22,9 @@ DNI_B = "87654321X"
 def encryption_key(settings):
     settings.SECURITY_ENCRYPTION_KEY_FILE = ""
     settings.SECURITY_ENCRYPTION_KEY_BASE64 = base64.b64encode(b"k" * 32).decode()
-    crypto._key.cache_clear()
+    crypto._keyring.cache_clear()
     yield
-    crypto._key.cache_clear()
+    crypto._keyring.cache_clear()
 
 
 @pytest.fixture(autouse=True)
@@ -70,7 +70,7 @@ class Actor:
             },
         )
         self.token = AccessToken.objects.create(
-            user=User.objects.get(dni=dni),
+            user=User.objects.get_by_natural_key(dni),
             application=app,
             token=secrets.token_urlsafe(32),
             expires=timezone.now() + timedelta(minutes=5),
