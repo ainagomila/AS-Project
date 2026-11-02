@@ -32,6 +32,9 @@ export default defineConfig({
   use: {
     baseURL: FRONTEND_BASE_URL,
     ignoreHTTPSErrors: true,
+    // Bounded steps: a stuck click or page load fails on that step, not as a bare test timeout.
+    actionTimeout: 15_000,
+    navigationTimeout: 30_000,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',

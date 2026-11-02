@@ -122,7 +122,8 @@ function normalisePan(pan) {
   return String(pan ?? '').replace(/\s+/g, '')
 }
 
-describe.sequential('Real backend flows', () => {
+// The tests build on each other (user, then account, then card), so they must not run concurrently.
+describe('Real backend flows', { concurrent: false }, () => {
   const cleanup = {
     cards: [],
     accounts: [],

@@ -74,4 +74,5 @@ elif [ "$(id -u)" -ne 0 ]; then
 fi
 echo "Starting Docker Compose..."
 # -V: fresh anonymous volumes (.venv, node_modules), owned by the images' non-root users.
-docker compose $COMPOSE_FILES up --build -V
+# Extra arguments go to "docker compose up", e.g. -d to run in the background (CI does).
+docker compose $COMPOSE_FILES up --build -V "$@"
