@@ -28,6 +28,7 @@
               <th>Role</th>
               <th>Status</th>
               <th v-if="userStore.isAdmin"></th>
+              <th v-if="userStore.isAdmin"></th>
             </tr>
           </thead>
           <tbody>
@@ -53,9 +54,40 @@
                   {{ user.active ? 'Disable' : 'Enable' }}
                 </button>
               </td>
+              <td v-if="userStore.isAdmin">
+                <button
+                  class="admin-btn danger"
+                  :disabled="user.role !== 'customer'"
+                  @click.stop="removeUser(user)"
+                >
+                  Delete
+                </button>
+                <button
+                  class="admin-btn"
+                  :disabled="user.role !== 'customer'"
+                  @click.stop="resetPassword(user)"
+                >
+                  Reset password
+                </button>
+              </td>
             </tr>
           </tbody>
         </table>
+      </section>
+
+      <section v-if="userStore.isAdmin" class="admin-section">
+        <h2 class="admin-title">Create customer</h2>
+        <form class="admin-form" @submit.prevent="createCustomer">
+          <input v-model="newUser.name" placeholder="Name" required />
+          <input v-model="newUser.dni" placeholder="DNI" required />
+          <input v-model="newUser.email" type="email" placeholder="Email" required />
+          <input v-model="newUser.phone" placeholder="+34600123456" required />
+          <input v-model="newUser.password" type="password" placeholder="Password" required />
+          <input v-model="newUser.birthdate" type="date" required />
+          <input v-model="newUser.gender" placeholder="Gender" required />
+          <input v-model="newUser.pin" type="password" inputmode="numeric" placeholder="PIN" required />
+          <button class="admin-btn" type="submit">Create</button>
+        </form>
       </section>
 
       <section v-if="selectedUser" class="admin-section">
@@ -145,7 +177,10 @@ import HeaderLayout from '@/components/layout/HeaderLayout.vue'
 import { useUserStore } from '@/stores/user'
 import {
   getAllUsers,
+  createUser,
   setUserActive,
+  resetUserPassword,
+  deleteUser,
   getUserAccounts,
   getAccountTransfers,
   getAuditLog,
@@ -160,6 +195,16 @@ const events = ref([])
 const selectedUser = ref(null)
 const selectedAccount = ref(null)
 const error = ref('')
+const newUser = ref({
+  name: '',
+  dni: '',
+  email: '',
+  phone: '',
+  password: '',
+  birthdate: '',
+  gender: '',
+  pin: '',
+})
 
 const ROLE_LABELS = { customer: 'Customer', admin: 'Admin', auditor: 'Auditor' }
 
@@ -223,6 +268,45 @@ async function toggleActive(user) {
   try {
     const updated = await setUserActive(user.id, !user.active)
     user.active = updated.active
+  } catch (e) {
+    error.value = describe(e)
+  }
+}
+
+async function resetPassword(user) {
+  const password = window.prompt('Enter a new temporary password')
+  if (!password) return
+  try {
+    await resetUserPassword(user.id, password)
+  } catch (e) {
+    error.value = describe(e)
+  }
+}
+
+async function removeUser(user) {
+  if (!window.confirm(`Delete ${user.name}? This removes their accounts and cards.`)) return
+  try {
+    await deleteUser(user.id)
+    users.value = users.value.filter((candidate) => candidate.id !== user.id)
+  } catch (e) {
+    error.value = describe(e)
+  }
+}
+
+async function createCustomer() {
+  try {
+    const created = await createUser({ ...newUser.value, role: 'customer', active: true })
+    users.value.push(created)
+    newUser.value = {
+      name: '',
+      dni: '',
+      email: '',
+      phone: '',
+      password: '',
+      birthdate: '',
+      gender: '',
+      pin: '',
+    }
   } catch (e) {
     error.value = describe(e)
   }
@@ -313,6 +397,26 @@ onMounted(async () => {
 .admin-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+.admin-btn.danger {
+  border-color: #ff8a80;
+  color: #ff8a80;
+}
+
+.admin-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+}
+
+.admin-form input {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  background: #333;
+  color: #fff;
 }
 
 .admin-error {

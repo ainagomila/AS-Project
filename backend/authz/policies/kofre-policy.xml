@@ -627,6 +627,88 @@
       </ObligationExpressions>
     </Rule>
 
+    <Rule RuleId="urn:kofre:rule:admin-creates-customer" Effect="Permit">
+      <Target>
+        <AnyOf><AllOf>
+          <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">admin</AttributeValue>
+            <AttributeDesignator Category="urn:oasis:names:tc:xacml:1.0:subject-category:access-subject"
+                                 AttributeId="urn:oasis:names:tc:xacml:2.0:subject:role"
+                                 DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+          </Match>
+          <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">create-user</AttributeValue>
+            <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:action"
+                                 AttributeId="urn:oasis:names:tc:xacml:1.0:action:action-id"
+                                 DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+          </Match>
+        </AllOf></AnyOf>
+      </Target>
+      <ObligationExpressions>
+        <ObligationExpression ObligationId="urn:kofre:obligation:audit" FulfillOn="Permit"/>
+      </ObligationExpressions>
+    </Rule>
+
+    <Rule RuleId="urn:kofre:rule:admin-resets-customer-password" Effect="Permit">
+      <Target>
+        <AnyOf><AllOf>
+          <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">admin</AttributeValue>
+            <AttributeDesignator Category="urn:oasis:names:tc:xacml:1.0:subject-category:access-subject"
+                                 AttributeId="urn:oasis:names:tc:xacml:2.0:subject:role"
+                                 DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+          </Match>
+          <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">reset-password</AttributeValue>
+            <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:action"
+                                 AttributeId="urn:oasis:names:tc:xacml:1.0:action:action-id"
+                                 DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+          </Match>
+        </AllOf></AnyOf>
+      </Target>
+      <Condition>
+        <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-is-in">
+          <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">customer</AttributeValue>
+          <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:resource"
+                               AttributeId="urn:kofre:resource:target-role"
+                               DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+        </Apply>
+      </Condition>
+      <ObligationExpressions>
+        <ObligationExpression ObligationId="urn:kofre:obligation:audit" FulfillOn="Permit"/>
+      </ObligationExpressions>
+    </Rule>
+
+    <Rule RuleId="urn:kofre:rule:admin-deletes-customer" Effect="Permit">
+      <Target>
+        <AnyOf><AllOf>
+          <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">admin</AttributeValue>
+            <AttributeDesignator Category="urn:oasis:names:tc:xacml:1.0:subject-category:access-subject"
+                                 AttributeId="urn:oasis:names:tc:xacml:2.0:subject:role"
+                                 DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+          </Match>
+          <Match MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">delete-user</AttributeValue>
+            <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:action"
+                                 AttributeId="urn:oasis:names:tc:xacml:1.0:action:action-id"
+                                 DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+          </Match>
+        </AllOf></AnyOf>
+      </Target>
+      <Condition>
+        <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-is-in">
+          <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">customer</AttributeValue>
+          <AttributeDesignator Category="urn:oasis:names:tc:xacml:3.0:attribute-category:resource"
+                               AttributeId="urn:kofre:resource:target-role"
+                               DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="true"/>
+        </Apply>
+      </Condition>
+      <ObligationExpressions>
+        <ObligationExpression ObligationId="urn:kofre:obligation:audit" FulfillOn="Permit"/>
+      </ObligationExpressions>
+    </Rule>
+
     <Rule RuleId="urn:kofre:rule:admin-changes-customer-status" Effect="Permit">
       <Target>
         <AnyOf>

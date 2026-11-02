@@ -7,7 +7,7 @@ from oauth2_provider.models import AccessToken
 from authz.models import AuditEvent
 from iam.models import User
 
-from .conftest import DNI_A, DNI_B, PIN, Actor
+from .conftest import DNI_A, DNI_B, PIN, Actor, register_payload
 
 pytestmark = pytest.mark.django_db
 
@@ -129,6 +129,42 @@ def test_admin_does_not_see_money(admin, bob):
 def test_unknown_target_user_looks_missing(admin):
     response = admin.client.patch("/admin/users/USER-NOPE", {"active": False}, format="json")
     assert (response.status_code, response.json()["code"]) == (404, "USER_NOT_FOUND")
+
+
+def test_admin_manages_customer_lifecycle(admin, bob):
+    payload = register_payload(
+        dni="11111111H",
+        phone="+34600111111",
+        name="Created Customer",
+        email="created@example.com",
+    )
+    created = admin.client.post("/admin/users", payload, format="json")
+    assert created.status_code == 201, created.content
+    target = User.objects.get_by_natural_key("11111111H")
+    assert target.role == "customer"
+
+    promoted = admin.client.patch(
+        f"/admin/users/{target.id}", {"role": "auditor"}, format="json"
+    )
+    assert (promoted.status_code, promoted.json()["code"]) == (403, "FORBIDDEN")
+    assert target.role == "customer"
+
+    reset = admin.client.post(
+        f"/admin/users/{User.objects.get_by_natural_key(DNI_B).id}",
+        {"newPassword": "New_Admin_Reset_1"},
+        format="json",
+    )
+    assert reset.status_code == 200
+    assert User.objects.get_by_natural_key(DNI_B).check_password("New_Admin_Reset_1")
+
+    deleted = admin.client.delete(f"/admin/users/{target.id}")
+    assert deleted.status_code == 204
+    assert not User.objects.filter(id=target.id).exists()
+
+    bob_id = User.objects.get_by_natural_key(DNI_B).id
+    deleted = admin.client.delete(f"/admin/users/{bob_id}")
+    assert deleted.status_code == 204
+    assert not User.objects.filter(id=bob_id).exists()
 
 
 # ------------------------------------------------------------------ auditor

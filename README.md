@@ -135,7 +135,7 @@ evaluated for every API request (details in section 7 of the
 | Role | Can do |
 |---|---|
 | `customer` (default) | Only their own profile, accounts, cards and transfers. |
-| `admin` | List users and enable or disable customers. Never sees balances or transfers, and cannot disable staff or themselves. |
+| `admin` | Create customers, list customer identities, reset customer passwords, delete customers, and enable or disable customers. The web API cannot provision staff roles. Never sees balances or transfers, and cannot modify staff or themselves. |
 | `auditor` | Read any user's accounts and transfers with personal data masked, and read the audit trail. Changes nothing. |
 
 To give a role, register the user in the app and run, in `backend/`:
