@@ -1,7 +1,7 @@
 ﻿import { test, expect, request as playwrightRequest, type APIRequestContext } from '@playwright/test'
 import { autoAcceptDialogs, logInThroughUi } from '../support/flows'
 import { createCleanupManager, type UserCleanupHandle } from '../support/cleanup'
-import { buildTestUser, registerUserViaApi } from '../support/testData'
+import { buildTestUser, computeCvv, generatePan, registerUserViaApi } from '../support/testData'
 
 // Generar IBAN espaÃ±ol vÃ¡lido con dÃ­gitos de control correctos
 function generateValidSpanishIban(): string {
@@ -90,15 +90,13 @@ test.describe.serial('Dashboard workflows', () => {
         const modal = page.locator('.modal')
         await expect(modal.getByRole('heading', { name: 'Add Card' })).toBeVisible()
 
-        const cardNumberTail = Math.floor(Math.random() * 1_000_000_000_000)
-            .toString()
-            .padStart(12, '0')
-        const cardNumber = `4532${cardNumberTail}`
+        const cardNumber = generatePan()
+        const expireYear = `${(new Date().getFullYear() + 2) % 100}`
         await page.getByTestId('add-card-number-input').fill(cardNumber)
         await page.getByTestId('add-card-pin-input').fill('1234')
-        await page.getByTestId('add-card-cvv-input').fill('123')
+        await page.getByTestId('add-card-cvv-input').fill(computeCvv(cardNumber, `12/${expireYear}`))
         await page.getByTestId('add-card-expire-month-input').fill('12')
-        await page.getByTestId('add-card-expire-year-input').fill(`${(new Date().getFullYear() + 2) % 100}`)
+        await page.getByTestId('add-card-expire-year-input').fill(expireYear)
         await page.getByTestId('add-card-type-select').selectOption('DEBIT')
         await page.getByTestId('add-card-alias-input').fill('Test Card')
         const accountIban = requireAccountIban(iban)

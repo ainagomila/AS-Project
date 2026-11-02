@@ -1,5 +1,7 @@
 ﻿import { APIRequestContext, request as playwrightRequest } from '@playwright/test'
-import { createHash, randomBytes } from 'node:crypto'
+import { createHash, createHmac, randomBytes } from 'node:crypto'
+import { existsSync, readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { API_BASE_URL, FRONTEND_BASE_URL } from './env'
 
 const DNI_LETTERS = 'TRWAGMYFPDXBNJZSQVHLCKE'
@@ -75,8 +77,52 @@ function generateIban() {
     return `${IBAN_COUNTRY_CODE}${checksum}${bban}`
 }
 
-function generatePan() {
-    return `4${randomDigits(15)}`
+function luhnCheckDigit(payload: string) {
+    // Double every second digit counting from the right of the payload, as Luhn does
+    // once the check digit is appended.
+    const sum = payload
+        .split('')
+        .reverse()
+        .reduce((acc, char, index) => {
+            const digit = Number(char)
+            if (index % 2 === 1) return acc + digit
+            const doubled = digit * 2
+            return acc + (doubled > 9 ? doubled - 9 : doubled)
+        }, 0)
+    return String((10 - (sum % 10)) % 10)
+}
+
+/** A random 16-digit Visa-style PAN that passes the Luhn check. */
+export function generatePan() {
+    const payload = `4${randomDigits(14)}`
+    return `${payload}${luhnCheckDigit(payload)}`
+}
+
+/**
+ * The verifier's secret key: VERIFIER_SECRET_KEY from the environment, or from the
+ * repository's .env that scripts/start-docker.* generates. Tests run from frontend/.
+ */
+function verifierSecretKey() {
+    if (process.env.VERIFIER_SECRET_KEY) return process.env.VERIFIER_SECRET_KEY
+    for (const file of [resolve(process.cwd(), '../.env'), resolve(process.cwd(), '.env')]) {
+        if (!existsSync(file)) continue
+        const match = /^VERIFIER_SECRET_KEY=(.*)$/m.exec(readFileSync(file, 'utf8'))
+        if (match?.[1]) return match[1].trim().replace(/^(['"])(.*)\1$/, '$2')
+    }
+    throw new Error(
+        'VERIFIER_SECRET_KEY not found: set it or run the tests from frontend/ next to the generated ../.env',
+    )
+}
+
+/**
+ * The CVV the verifier service accepts for this PAN and expiry date (MM/YY), derived
+ * like the issuing bank would: HMAC-SHA256 of "<PAN>E<MM/YY>" with the verifier's key,
+ * modulo 1000. Mirrors verifier-backend/app/main.py.
+ */
+export function computeCvv(pan: string, expiry: string) {
+    const tag = createHmac('sha256', verifierSecretKey()).update(`${pan}E${expiry}`).digest()
+    const cvv = BigInt(`0x${tag.toString('hex')}`) % 1000n
+    return cvv.toString().padStart(3, '0')
 }
 
 export type TestUser = {
@@ -140,14 +186,16 @@ export type TestCard = {
 
 export function buildTestCard(overrides: Partial<TestCard> = {}): TestCard {
     const expireYear = overrides.expireYear ?? `${(new Date().getFullYear() + 2).toString().slice(-2)}`
+    const expireMonth = overrides.expireMonth ?? '12'
+    const pan = overrides.pan ?? generatePan()
     return {
-        pan: overrides.pan ?? generatePan(),
-        cvv: overrides.cvv ?? randomDigits(3),
+        pan,
+        cvv: overrides.cvv ?? computeCvv(pan, `${expireMonth}/${expireYear}`),
         cardPin: overrides.cardPin ?? randomDigits(4),
         alias: overrides.alias ?? `Travel ${uniqueSuffix()}`,
         type: overrides.type ?? 'DEBIT',
         bank: overrides.bank ?? 'Kofre Test Bank',
-        expireMonth: overrides.expireMonth ?? '12',
+        expireMonth,
         expireYear,
         accountIban: overrides.accountIban ?? '',
     }
