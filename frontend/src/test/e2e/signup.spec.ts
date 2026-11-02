@@ -1,7 +1,7 @@
 ﻿import { test, expect } from '@playwright/test'
 import { autoAcceptDialogs, completeSignupForm, submitLoginForm } from './support/flows'
 import { createCleanupManager } from './support/cleanup'
-import { buildTestUser, registerUserViaApi } from './support/testData'
+import { buildTestUser, fetchAuthToken, registerUserViaApi } from './support/testData'
 
 test.describe('Sign-up flow', () => {
   let cleanup: ReturnType<typeof createCleanupManager>
@@ -64,18 +64,21 @@ test.describe('Sign-up flow', () => {
     // No user created, no cleanup needed
   })
 
-  test('disallows registering an already existing DNI', async ({ page, request }) => {
+  // Sign-up must not reveal who is a customer: a taken DNI gets the same answer as a
+  // new one, and the existing account is left untouched.
+  test('does not reveal or overwrite an already registered DNI', async ({ page, request }) => {
     const existing = buildTestUser()
     await registerUserViaApi(request, existing)
     cleanup.registerUser({ dni: existing.dni, pin: existing.pin, password: existing.password })
+    const impostor = buildTestUser({ dni: existing.dni })
 
     await page.goto('/signup')
-    await completeSignupForm(page, existing)
+    await completeSignupForm(page, impostor)
+    await page.getByTestId('signup-submit-btn').click()
+    await expect(page).toHaveURL(/\/accounts\/login\//)
 
-    const submitBtn = page.getByTestId('signup-submit-btn')
-    await expect(page.getByText('This DNI is already registered.', { exact: false })).toBeVisible()
-    await expect(submitBtn).toBeDisabled()
-    await expect(page).toHaveURL(/\/signup$/)
+    expect(await fetchAuthToken(request, existing.dni, impostor.password)).toBeNull()
+    expect(await fetchAuthToken(request, existing.dni, existing.password)).toBeTruthy()
   })
 
   test('requires matching passwords and accepted terms before enabling the CTA', async ({ page }) => {

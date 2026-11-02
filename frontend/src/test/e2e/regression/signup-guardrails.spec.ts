@@ -45,19 +45,22 @@ test.describe('Signup guardrails', () => {
         ).toBeVisible()
     })
 
-    test('shows the duplicate user warning when the backend reports an existing DNI', async ({ page, request }) => {
-        autoAcceptDialogs(page)
+    test('answers a taken DNI exactly like a new sign-up, without an error', async ({ page, request }) => {
+        const dialogs: string[] = []
+        page.on('dialog', (dialog) => {
+            dialogs.push(dialog.message())
+            void dialog.accept()
+        })
         const existing = buildTestUser()
         await registerUserViaApi(request, existing)
         cleanup.registerUser({ dni: existing.dni, pin: existing.pin, password: existing.password })
 
         await page.goto('/signup')
-        await completeSignupForm(page, existing)
+        await completeSignupForm(page, buildTestUser({ dni: existing.dni }))
+        await page.getByTestId('signup-submit-btn').click()
 
-        const submitBtn = page.getByTestId('signup-submit-btn')
-        await expect(page.getByText('This DNI is already registered.', { exact: false })).toBeVisible()
-        await expect(submitBtn).toBeDisabled()
-        await expect(page).toHaveURL(/\/signup$/)
+        await expect(page).toHaveURL(/\/accounts\/login\//)
+        expect(dialogs).toEqual([])
     })
 
     test('blocks password mismatches without contacting the API', async ({ page }) => {
