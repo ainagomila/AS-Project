@@ -105,6 +105,12 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: frontend/package-lock.json
+      # Before the stack: Docker would create frontend/node_modules as root (it is
+      # the mount point of the container's own node_modules volume).
+      - run: npm ci
+        working-directory: frontend
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
       # Same script as local development: mkcert certificate, generated .env secrets,
       # then the stack in the background.
       - name: Start the stack
@@ -118,10 +124,6 @@ jobs:
             done
             curl -fsS -o /dev/null --cacert backend/.certs/rootCA.pem "$url"
           done
-      - run: npm ci
-        working-directory: frontend
-      - run: npx playwright install --with-deps chromium
-        working-directory: frontend
       - name: Browser tests
         working-directory: frontend
         env:
