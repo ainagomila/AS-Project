@@ -251,7 +251,10 @@ npm run test:e2e:local                                                         #
 
 The integration (`src/test/integration`) and browser tests talk to a running
 stack on `https://localhost:5173` and `https://localhost:8080` and leave their
-test users in its database.
+test users in its database. The tests that add cards generate Luhn-valid PANs and
+derive the CVV the verifier expects, so they need its key: `VERIFIER_SECRET_KEY`
+from the environment, or else from the repository's `.env` (run them from
+`frontend/`).
 
 CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs on every push to
 `main` and every pull request: backend tests against Postgres, frontend lint and

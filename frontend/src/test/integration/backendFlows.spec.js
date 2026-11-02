@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { signupUser } from '@/api/authService'
-import { fetchAuthToken } from '../e2e/support/testData'
+import { computeCvv, fetchAuthToken, generatePan } from '../e2e/support/testData'
 import {
   addAccount,
   addCard,
@@ -104,11 +104,13 @@ function buildTestAccount() {
 }
 
 function buildTestCard(accountIban) {
+  const pan = generatePan()
+  const expireDate = '12/29'
   return {
-    pan: `4${randomDigits(15)}`,
-    expireDate: '12/29',
+    pan,
+    expireDate,
     alias: `QA Card ${uniqueSuffix()}`,
-    cvv: randomDigits(3),
+    cvv: computeCvv(pan, expireDate),
     pin: randomDigits(4),
     type: 'DEBIT',
     bank: 'Kofre QA Bank',
