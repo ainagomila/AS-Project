@@ -18,8 +18,23 @@ describe('admin access', () => {
     expect(store.isAdmin).toBe(false)
   })
 
-  it('marks the admin route as admin-only', () => {
+  it('derives the role from the login payload', () => {
+    const store = useUserStore()
+    store.login('12345678Z', { token: 't', user: { dni: '12345678Z', role: 'ADMIN' } })
+    expect(store.isAdmin).toBe(true)
+    expect(store.isStaff).toBe(true)
+
+    store.login('12345678Z', { token: 't', user: { dni: '12345678Z', role: 'AUDITOR' } })
+    expect(store.isAdmin).toBe(false)
+    expect(store.isStaff).toBe(true)
+
+    store.login('12345678Z', { token: 't', user: { dni: '12345678Z', role: 'USER' } })
+    expect(store.isAdmin).toBe(false)
+    expect(store.isStaff).toBe(false)
+  })
+
+  it('marks the admin route as staff-only', () => {
     const admin = router.getRoutes().find((route) => route.name === 'Admin')
-    expect(admin?.meta).toMatchObject({ requiresAuth: true, requiresAdmin: true })
+    expect(admin?.meta).toMatchObject({ requiresAuth: true, requiresStaff: true })
   })
 })

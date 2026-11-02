@@ -1,6 +1,6 @@
 from django.core.management.base import BaseCommand, CommandError
 
-from iam.models import User
+from iam.models import Role, User
 
 
 class Command(BaseCommand):
@@ -8,11 +8,17 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("dni")
+        parser.add_argument(
+            "--role",
+            choices=[r.value for r in Role],
+            default=Role.ADMIN,
+            help="Role to assign (default: ADMIN).",
+        )
 
-    def handle(self, *args, dni, **options):
+    def handle(self, *args, dni, role, **options):
         user = User.objects.filter(dni=dni).first()
         if user is None:
             raise CommandError(f"No user with DNI {dni}. Register the user first.")
-        user.is_admin = True
-        user.save()
-        self.stdout.write(f"{dni} is now an administrator")
+        user.role = role
+        user.save(update_fields=["role"])
+        self.stdout.write(f"{dni} is now {role}")

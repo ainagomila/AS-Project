@@ -28,13 +28,27 @@ The field-encryption key can also be given as `SECURITY_ENCRYPTION_KEY_BASE64`
 The Docker startup script installs `mkcert` when necessary, then creates and
 trusts the local certificate before starting the containers.
 
-## Administrator
+## Roles and administration
 
-Register a user through the app, then:
+Every user has a `role`: `USER` (customer, default), `ADMIN` (full management)
+or `AUDITOR` (read-only compliance access). The login response's `user` object
+carries both `role` and a boolean `admin` convenience flag.
+
+The first administrator is created after registering a user through the app:
 
 ```sh
 uv run python manage.py create_admin <dni>
+# or, to create an auditor instead:
+uv run python manage.py create_admin <dni> --role AUDITOR
 ```
+
+Administrator endpoints live under `/admin` and are protected by a centralised
+policy layer (`iam/permissions.py`); every mutation is written to the audit log.
+Administrators can manage users (create, enable/disable, change role, reset
+password, delete), accounts (freeze/unfreeze), cards (block/delete), review all
+transfers and the audit log, and change system settings (`SESSION_TTL_SECONDS`,
+`REGISTRATION_ENABLED`, `TRANSFER_MAX_AMOUNT`, `MAINTENANCE_MODE`,
+`LOGIN_MAX_ATTEMPTS`, `LOGIN_LOCKOUT_SECONDS`). Auditors can only read.
 
 ## Tests
 

@@ -11,7 +11,7 @@ pytestmark = pytest.mark.django_db
 def test_get_profile(ana):
     response = ana.client.get(ana.url())
     assert response.status_code == 200
-    assert set(response.json()) == {"dni", "name", "email", "phone", "birthdate", "gender", "admin"}
+    assert set(response.json()) == {"dni", "name", "email", "phone", "birthdate", "gender", "role", "admin"}
 
 
 def test_list_users_shape(ana, bob):

@@ -30,7 +30,11 @@ export const useUserStore = defineStore('user', () => {
   const birthday = computed(() => userData.value?.birthday ?? '')
   const gender = computed(() => userData.value?.gender ?? '')
   const pin = computed(() => userData.value?.pin ?? '')
-  const isAdmin = computed(() => userData.value?.admin === true)
+  const role = computed(() => userData.value?.role ?? 'USER')
+  const isAdmin = computed(
+    () => userData.value?.admin === true || userData.value?.role === 'ADMIN',
+  )
+  const isStaff = computed(() => isAdmin.value || role.value === 'AUDITOR')
 
   /**
    * Logs in a user updating the store and localStorage snapshots.
@@ -113,7 +117,9 @@ export const useUserStore = defineStore('user', () => {
     birthday,
     gender,
     pin,
+    role,
     isAdmin,
+    isStaff,
 
     login,
     logout,

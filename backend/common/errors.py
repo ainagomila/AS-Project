@@ -11,12 +11,14 @@ from django.http import Http404
 from rest_framework import exceptions as drf_exceptions
 from rest_framework.response import Response
 
-NOT_FOUND = {"USER_NOT_FOUND", "ACCOUNT_NOT_FOUND", "CARD_NOT_FOUND", "BANK_NOT_FOUND"}
+NOT_FOUND = {"USER_NOT_FOUND", "ACCOUNT_NOT_FOUND", "CARD_NOT_FOUND", "BANK_NOT_FOUND","SETTING_NOT_FOUND"}
 CONFLICT = {
     "USER_ALREADY_EXISTS",
     "ACCOUNT_ALREADY_EXISTS",
     "CARD_ALREADY_EXISTS",
     "PASSWORD_ALREADY_EXISTS",
+    "LAST_ADMIN",
+    "CANNOT_MODIFY_SELF",
 }
 BAD_REQUEST = {
     "INVALID_DNI_FORMAT",
@@ -44,10 +46,14 @@ UNPROCESSABLE = {
     "USER_CANNOT_BE_MODIFIED",
     "APPLICATION_ERROR",
     "INVALID_PIN",
+    "ACCOUNT_FROZEN",
 }
 # UNAUTHORIZED maps to 403 in the original ProblemMapper. FORBIDDEN and
 # USER_DISABLED are new codes introduced with the administrator role.
-FORBIDDEN = {"UNAUTHORIZED", "FORBIDDEN", "USER_DISABLED"}
+FORBIDDEN = {"UNAUTHORIZED", "FORBIDDEN", "USER_DISABLED", "REGISTRATION_DISABLED"}
+# Account lockout (login throttling) and maintenance mode.
+LOCKED = {"ACCOUNT_LOCKED"}
+UNAVAILABLE = {"MAINTENANCE_MODE"}
 
 STATUS_BY_CODE = {
     **{c: 404 for c in NOT_FOUND},
@@ -55,6 +61,8 @@ STATUS_BY_CODE = {
     **{c: 400 for c in BAD_REQUEST},
     **{c: 422 for c in UNPROCESSABLE},
     **{c: 403 for c in FORBIDDEN},
+    **{c: 423 for c in LOCKED},
+    **{c: 503 for c in UNAVAILABLE},
     "INFRA_ERROR": 500,
     "INTERNAL_ERROR": 500,
 }

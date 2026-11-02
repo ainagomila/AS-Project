@@ -13,6 +13,7 @@ from common import validators as v
 from common.errors import AppError
 from common.validators import has_text
 from iam.services import find_by_dni
+from iam.system_settings import get_setting
 
 from .models import Payment
 
@@ -49,12 +50,19 @@ def add_transfer(dni, iban, beneficiary, destination_iban, amount, currency, con
         destination_iban = re.sub(r"\s+", "", destination_iban)
     source = _resolve_user_account(dni, iban, pin, with_pin=True)
 
+    if source.status == "FROZEN":
+        raise AppError("ACCOUNT_FROZEN", "El compte està congelat i no pot enviar transferències")
+
     if not has_text(beneficiary):
         raise AppError("APPLICATION_ERROR", "El camp 'beneficiary' és obligatori!")
     if not v.is_valid_iban(destination_iban):
         raise AppError("INVALID_IBAN_FORMAT", "El 'destinationIban' és invàlid.")
     if amount is None or Decimal(str(amount)) <= 0:
         raise AppError("DOMAIN_ERROR", "L''amount' ha de ser estrictament positiu.")
+
+    max_amount = get_setting("TRANSFER_MAX_AMOUNT")
+    if max_amount is not None and Decimal(str(amount)) > Decimal(str(max_amount)):
+        raise AppError("DOMAIN_ERROR", f"L'import supera el límit de transferència ({max_amount})")
     if not has_text(currency):
         raise AppError("DOMAIN_ERROR", "La 'currency' és obligatòria.")
     if not has_text(concept):

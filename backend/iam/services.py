@@ -14,7 +14,8 @@ from common import validators as v
 from common.errors import AppError
 from common.validators import has_text
 
-from .models import Session, User
+from . import system_settings
+from .models import Role, Session, User
 
 
 # ---------------------------------------------------------------- helpers
@@ -31,16 +32,20 @@ def user_response(user):
         "phone": user.phone,
         "birthdate": user.birthdate.isoformat(),
         "gender": user.gender,
-        "admin": user.is_admin,
+        "role": user.role,
+        "admin": user.role == Role.ADMIN,
     }
 
 
 def _open_session(user):
     user.purge_expired_sessions()
+    ttl = system_settings.get_setting("SESSION_TTL_SECONDS")
+    if ttl is None:
+        ttl = settings.SESSION_TTL_SECONDS
     return Session.objects.create(
         token=str(uuid.uuid4()),
         user=user,
-        expires_at=timezone.now() + timedelta(seconds=settings.SESSION_TTL_SECONDS),
+        expires_at=timezone.now() + timedelta(seconds=int(ttl)),
     )
 
 
@@ -90,21 +95,8 @@ def _user_with_pin(dni, pin):
 
 # ---------------------------------------------------------------- auth
 
-def register(name, dni, email, phone, password, birthdate, gender, pin):
-    required = [
-        (dni, "INVALID_DNI_FORMAT", "El DNI és obligatori"),
-        (name, "MISSING_FIELDS", "El nom és obligatori"),
-        (password, "MISSING_FIELDS", "La contrassenya és obligatòria al registre"),
-        (email, "INVALID_EMAIL_FORMAT", "L'email és obligatori"),
-        (phone, "INVALID_PHONE_FORMAT", "El telèfon és obligatori"),
-        (birthdate, "INVALID_BIRTHDAY_FORMAT", "La data de naixement és obligatòria"),
-        (gender, "MISSING_FIELDS", "El gènere és obligatori"),
-        (pin, "INVALID_PIN_FORMAT", "El PIN és obligatori al registre"),
-    ]
-    for value, code, message in required:
-        if not has_text(value):
-            raise AppError(code, message)
-
+def create_user_record(name, dni, email, phone, password, birthdate, gender, pin):
+    """Validate and build (but not save) a new User. Raises AppError on failure."""
     if find_by_dni(dni) is not None:
         raise AppError("USER_ALREADY_EXISTS", "Ja existeix un usuari amb el DNI indicat")
 
@@ -127,13 +119,13 @@ def register(name, dni, email, phone, password, birthdate, gender, pin):
         user.gender = v.validate_gender(gender)
     except ValueError as exc:
         raise _map_domain_error(exc) from None
+    return user
 
-    user.save()
-    session = _open_session(user)
 
+def _initial_account(user):
     # Initial "Kofre" account. The original names the factory method
     # createWithZeroBalance but opens the account with 100.
-    Account.objects.create(
+    return Account.objects.create(
         id=ids.generate("ACC"),
         name="Kofre",
         bank="Kofre Bank",
@@ -142,7 +134,41 @@ def register(name, dni, email, phone, password, birthdate, gender, pin):
         iban=v.random_spanish_iban(),
         user_id=user.id,
     )
+
+
+def register(name, dni, email, phone, password, birthdate, gender, pin):
+    if not system_settings.get_setting("REGISTRATION_ENABLED"):
+        raise AppError("REGISTRATION_DISABLED", "El registre de nous usuaris està deshabilitat")
+
+    required = [
+        (dni, "INVALID_DNI_FORMAT", "El DNI és obligatori"),
+        (name, "MISSING_FIELDS", "El nom és obligatori"),
+        (password, "MISSING_FIELDS", "La contrassenya és obligatòria al registre"),
+        (email, "INVALID_EMAIL_FORMAT", "L'email és obligatori"),
+        (phone, "INVALID_PHONE_FORMAT", "El telèfon és obligatori"),
+        (birthdate, "INVALID_BIRTHDAY_FORMAT", "La data de naixement és obligatòria"),
+        (gender, "MISSING_FIELDS", "El gènere és obligatori"),
+        (pin, "INVALID_PIN_FORMAT", "El PIN és obligatori al registre"),
+    ]
+    for value, code, message in required:
+        if not has_text(value):
+            raise AppError(code, message)
+
+    user = create_user_record(name, dni, email, phone, password, birthdate, gender, pin)
+    user.save()
+    _initial_account(user)
+    session = _open_session(user)
     return {"message": "User registered successfully", "token": session.token}
+
+
+def _record_failed_login(user):
+    max_attempts = system_settings.get_setting("LOGIN_MAX_ATTEMPTS") or 5
+    lockout = system_settings.get_setting("LOGIN_LOCKOUT_SECONDS") or 900
+    user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
+    if user.failed_login_attempts >= max_attempts:
+        user.locked_until = timezone.now() + timedelta(seconds=int(lockout))
+        user.failed_login_attempts = 0
+    user.save(update_fields=["failed_login_attempts", "locked_until"])
 
 
 def login(dni, password):
@@ -151,10 +177,16 @@ def login(dni, password):
     user = find_by_dni(dni)
     if user is None:
         raise AppError("USER_NOT_FOUND", "Usuari inexistent")
+    if user.locked_until is not None and user.locked_until > timezone.now():
+        raise AppError("ACCOUNT_LOCKED", "El compte està bloquejat temporalment")
     if user.password != password:
+        _record_failed_login(user)
         raise AppError("INVALID_CREDENTIALS", "Credencials invàlides")
     if not user.is_active:
         raise AppError("USER_DISABLED", "L'usuari està deshabilitat")
+    user.failed_login_attempts = 0
+    user.locked_until = None
+    user.save(update_fields=["failed_login_attempts", "locked_until"])
     session = _open_session(user)
     return {"token": session.token, "user": user_response(user)}
 

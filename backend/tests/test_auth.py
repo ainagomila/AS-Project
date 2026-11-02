@@ -62,6 +62,7 @@ def test_login_returns_token_and_user(client, ana):
         "phone": "+34600123456",
         "birthdate": "1995-04-10",
         "gender": "FEMALE",
+        "role": "USER",
         "admin": False,
     }
 

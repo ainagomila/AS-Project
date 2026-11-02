@@ -92,12 +92,12 @@ const routes = [
     meta: { requiresAuth: true },
   },
 
-  // Administración
+  // Administración (administradores y auditores)
   {
     path: '/admin',
     name: 'Admin',
     component: AdminView,
-    meta: { requiresAuth: true, requiresAdmin: true },
+    meta: { requiresAuth: true, requiresStaff: true },
   },
   // Catch-all
   {
@@ -142,8 +142,8 @@ router.beforeEach((to, from, next) => {
     })
   }
 
-  // 3) Rutas de administración: solo si el perfil guardado es admin
-  if (to.meta.requiresAdmin && !userStore.isAdmin) {
+  // 3) Rutas de administración: solo staff (admin o auditor)
+  if (to.meta.requiresStaff && !userStore.isStaff) {
     return next({ name: 'Dashboard' })
   }
 
