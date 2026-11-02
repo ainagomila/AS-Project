@@ -154,6 +154,24 @@ The back office is the shield icon in the header.
 
 Made-up values that pass both the frontend's and the backend's validation.
 
+**Seeded users.** To skip sign-up, create two customers, an admin and an
+auditor, each with the usual 100 EUR "Kofre" account:
+
+```sh
+docker compose exec backend uv run python manage.py seed_users
+```
+
+| DNI | Role |
+|---|---|
+| `10000001S` | customer |
+| `10000002Q` | customer |
+| `10000003V` | admin |
+| `10000004H` | auditor |
+
+No credentials are hard-coded: the command prints a random password and user
+PIN once (shared by the four users), or takes `--password` and `--pin`. Users
+that already exist are left unchanged, so it is safe to run again.
+
 **Users.** The DNI needs the right control letter. Sign-up also requires an
 adult birthdate and a Spanish mobile number (`+34` and 9 digits). Each DNI and
 phone can be registered once; registering a taken one answers the same message

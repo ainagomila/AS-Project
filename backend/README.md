@@ -62,6 +62,10 @@ uv run python manage.py set_role <dni> admin   # or auditor, operations, or cust
 
 `create_admin <dni>` is the same as `set_role <dni> admin`.
 
+For demo users without signing up, `seed_users` creates two customers, an admin
+and an auditor (see "Test data" in the root README). It prints a random password
+and PIN once, or takes `--password` and `--pin`.
+
 ## Tests
 
 The tests need PostgreSQL and `.env.d/oidc.key`; they set their own encryption
