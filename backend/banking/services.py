@@ -3,13 +3,15 @@ AccountQueryService."""
 
 from decimal import Decimal
 
+from django.db import transaction
+
 from common import ids
 from common import validators as v
 from common.errors import AppError
 from common.validators import has_text
 from iam.services import find_by_dni
 
-from .models import Account
+from .models import Account, Card
 
 
 def account_response(account):
@@ -39,7 +41,7 @@ def get_owned_account_with_pin(dni, iban, pin):
         raise AppError("USER_NOT_FOUND", "Usuari inexistent!")
     if not has_text(pin):
         raise AppError("INVALID_PIN_FORMAT", "El PIN és obligatori!")
-    if user.pin != pin:
+    if not user.check_pin(pin):
         raise AppError("INVALID_PIN", "El PIN és incorrecte!")
     return _owned(user, iban, "Compte inexistent!")
 
@@ -64,7 +66,7 @@ def list_accounts(dni):
     return {"accounts": [account_response(a) for a in Account.objects.filter(user_id=user.id)]}
 
 
-def add_account(dni, iban, name, bank, balance, currency):
+def add_account(dni, iban, name, bank, currency):
     user = find_by_dni(dni)
     if user is None:
         raise AppError("USER_NOT_FOUND", "Usuari inexistent")
@@ -77,11 +79,6 @@ def add_account(dni, iban, name, bank, balance, currency):
     if find_by_iban(iban) is not None:
         raise AppError("ACCOUNT_ALREADY_EXISTS", "El compte ja existeix")
 
-    # The opening balance is whatever the client sends.
-    balance = Decimal("0") if balance is None else Decimal(str(balance))
-    if balance < 0:
-        raise AppError("DOMAIN_ERROR", "El saldo no pot ser negatiu")
-
     # Not caught in the original either: a missing or unknown currency is a 500.
     if not has_text(currency):
         raise ValueError("El 'currency' d'Account ha de tenir un valor diferent a null o blank!")
@@ -89,7 +86,7 @@ def add_account(dni, iban, name, bank, balance, currency):
         id=ids.generate("ACC"),
         name=name,
         bank=bank,
-        balance=v.money_amount(balance),
+        balance=Decimal("0.00"),  # new accounts open empty; a client balance is ignored
         currency=v.validate_currency(currency),
         iban=v.validate_iban(iban),
         user_id=user.id,
@@ -107,5 +104,8 @@ def rename_account(dni, iban, name):
 
 
 def delete_account(dni, iban, pin):
-    # Cards and payments of the account are left behind, as in the original.
-    get_owned_account_with_pin(dni, iban, pin).delete()
+    """Delete the account and its cards. Payments are kept as the counterparty's history."""
+    account = get_owned_account_with_pin(dni, iban, pin)
+    with transaction.atomic():
+        Card.objects.filter(account_id=account.id).delete()
+        account.delete()

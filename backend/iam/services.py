@@ -2,26 +2,24 @@
 UserCommandService and UserQueryService."""
 
 import re
-import uuid
-from datetime import timedelta
 
-from django.conf import settings
-from django.utils import timezone
+from django.db import transaction
+from django.db.models import Q
+from oauth2_provider.models import AccessToken, RefreshToken
 
-from banking.models import Account
+from banking.models import Account, Card
 from common import ids
 from common import validators as v
 from common.errors import AppError
 from common.validators import has_text
 
-from . import system_settings
-from .models import Role, Session, User
+from .models import ADMIN, User
 
 
 # ---------------------------------------------------------------- helpers
 
 def find_by_dni(dni):
-    return User.objects.filter(dni=dni).first()
+    return User.objects.find_by_dni(dni)
 
 
 def user_response(user):
@@ -33,20 +31,21 @@ def user_response(user):
         "birthdate": user.birthdate.isoformat(),
         "gender": user.gender,
         "role": user.role,
-        "admin": user.role == Role.ADMIN,
+        "admin": user.role == ADMIN,
     }
 
 
-def _open_session(user):
-    user.purge_expired_sessions()
-    ttl = system_settings.get_setting("SESSION_TTL_SECONDS")
-    if ttl is None:
-        ttl = settings.SESSION_TTL_SECONDS
-    return Session.objects.create(
-        token=str(uuid.uuid4()),
-        user=user,
-        expires_at=timezone.now() + timedelta(seconds=int(ttl)),
-    )
+def revoke_tokens(user, keep=None):
+    """End the user's OAuth sessions, except the `keep` access token if one is given."""
+    refresh_tokens = RefreshToken.objects.filter(user=user, revoked__isnull=True)
+    access_tokens = AccessToken.objects.filter(user=user)
+    if keep is not None:
+        refresh_tokens = refresh_tokens.exclude(access_token=keep)
+        access_tokens = access_tokens.exclude(pk=keep.pk)
+    for token in refresh_tokens:  # also revokes the refresh token's access token
+        token.revoke()
+    for token in access_tokens:
+        token.revoke()
 
 
 def _split_phone(mobile):
@@ -80,66 +79,22 @@ def _require_pin(dni, pin):
     if not has_text(pin):
         raise AppError("INVALID_PIN_FORMAT", "El PIN és obligatori")
     user = find_by_dni(dni)
-    if user is None:
-        raise AppError("USER_NOT_FOUND", "L'usuari no existeix")
-    if user.pin != pin:
+    # An unknown DNI gets the wrong-PIN answer: the public reset-password must not reveal users.
+    if user is None or not user.check_pin(pin):
         raise AppError("INVALID_PIN", "El PIN és incorrecte!")
     return user
 
 
 def _user_with_pin(dni, pin):
-    if find_by_dni(dni) is None:
-        raise AppError("USER_NOT_FOUND", "Usuari inexistent")
     return _require_pin(dni, pin)
 
 
 # ---------------------------------------------------------------- auth
 
-def create_user_record(name, dni, email, phone, password, birthdate, gender, pin):
-    """Validate and build (but not save) a new User. Raises AppError on failure."""
-    if find_by_dni(dni) is not None:
-        raise AppError("USER_ALREADY_EXISTS", "Ja existeix un usuari amb el DNI indicat")
-
-    try:
-        prefix, number = _split_phone(phone)
-        prefix, number = v.validate_phone(prefix, number)
-    except ValueError as exc:
-        raise AppError("INVALID_PHONE_FORMAT", str(exc)) from None
-    if User.objects.filter(phone_prefix=prefix, phone_number=number).exists():
-        raise AppError("USER_ALREADY_EXISTS", "Ja existeix un usuari amb el telèfon indicat")
-
-    try:
-        user = User(id=ids.generate("USER"), name=name)
-        user.password = v.validate_password(password)
-        user.pin = v.validate_user_pin(pin)
-        user.dni = v.validate_dni(dni)
-        user.phone_prefix, user.phone_number = prefix, number
-        user.email = v.validate_email(email)
-        user.birthdate = v.validate_birthdate(birthdate)
-        user.gender = v.validate_gender(gender)
-    except ValueError as exc:
-        raise _map_domain_error(exc) from None
-    return user
-
-
-def _initial_account(user):
-    # Initial "Kofre" account. The original names the factory method
-    # createWithZeroBalance but opens the account with 100.
-    return Account.objects.create(
-        id=ids.generate("ACC"),
-        name="Kofre",
-        bank="Kofre Bank",
-        balance=v.money_amount(100),
-        currency="EUR",
-        iban=v.random_spanish_iban(),
-        user_id=user.id,
-    )
+REGISTERED = {"message": "Registration received. Log in to continue."}
 
 
 def register(name, dni, email, phone, password, birthdate, gender, pin):
-    if not system_settings.get_setting("REGISTRATION_ENABLED"):
-        raise AppError("REGISTRATION_DISABLED", "El registre de nous usuaris està deshabilitat")
-
     required = [
         (dni, "INVALID_DNI_FORMAT", "El DNI és obligatori"),
         (name, "MISSING_FIELDS", "El nom és obligatori"),
@@ -154,92 +109,46 @@ def register(name, dni, email, phone, password, birthdate, gender, pin):
         if not has_text(value):
             raise AppError(code, message)
 
-    user = create_user_record(name, dni, email, phone, password, birthdate, gender, pin)
+    try:
+        prefix, number = _split_phone(phone)
+        prefix, number = v.validate_phone(prefix, number)
+    except ValueError as exc:
+        raise AppError("INVALID_PHONE_FORMAT", str(exc)) from None
+
+    try:
+        user = User(id=ids.generate("USER"), name=name)
+        #user.password = v.validate_password(password) -> changed!!!!
+        user.set_password(v.validate_password(password))
+        user.set_pin(v.validate_user_pin(pin))
+        user.dni = v.validate_dni(dni)
+        user.set_phone(prefix, number)
+        user.email = v.validate_email(email)
+        user.birthdate = v.validate_birthdate(birthdate)
+        user.gender = v.validate_gender(gender)
+    except ValueError as exc:
+        raise _map_domain_error(exc) from None
+
+    # A taken DNI or phone gets the same answer as a new user (after the same password
+    # and PIN hashing), so registration cannot be used to find out who is a customer.
+    taken = User.objects.filter(
+        Q(dni_index=user.dni_index) | Q(phone_index=user.phone_index)
+    ).exists()
+    if taken:
+        return REGISTERED
     user.save()
-    _initial_account(user)
-    session = _open_session(user)
-    return {"message": "User registered successfully", "token": session.token}
 
-
-def _record_failed_login(user):
-    max_attempts = system_settings.get_setting("LOGIN_MAX_ATTEMPTS") or 5
-    lockout = system_settings.get_setting("LOGIN_LOCKOUT_SECONDS") or 900
-    user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
-    if user.failed_login_attempts >= max_attempts:
-        user.locked_until = timezone.now() + timedelta(seconds=int(lockout))
-        user.failed_login_attempts = 0
-    user.save(update_fields=["failed_login_attempts", "locked_until"])
-
-
-def login(dni, password):
-    if not has_text(dni) or not has_text(password):
-        raise AppError("INVALID_CREDENTIALS", "Credencials invàlides o incompletes")
-    user = find_by_dni(dni)
-    if user is None:
-        raise AppError("USER_NOT_FOUND", "Usuari inexistent")
-    if user.locked_until is not None and user.locked_until > timezone.now():
-        raise AppError("ACCOUNT_LOCKED", "El compte està bloquejat temporalment")
-    if user.password != password:
-        _record_failed_login(user)
-        raise AppError("INVALID_CREDENTIALS", "Credencials invàlides")
-    if not user.is_active:
-        raise AppError("USER_DISABLED", "L'usuari està deshabilitat")
-    user.failed_login_attempts = 0
-    user.locked_until = None
-    user.save(update_fields=["failed_login_attempts", "locked_until"])
-    session = _open_session(user)
-    return {"token": session.token, "user": user_response(user)}
-
-
-def _validate_session_data(dni, token):
-    if dni is None and token is None:
-        raise AppError("MISSING_FIELDS", "Cal informar la sessió")
-    if not has_text(dni):
-        raise AppError("INVALID_DNI_FORMAT", "El DNI és obligatori")
-    if not has_text(token):
-        raise AppError("UNAUTHORIZED", "Token de sessió obligatori")
-
-
-def logout(dni, token):
-    _validate_session_data(dni, token)
-    user = find_by_dni(dni)
-    if user is None:
-        raise AppError("USER_NOT_FOUND", "Usuari inexistent")
-    if not user.check_session(token):
-        raise AppError("UNAUTHORIZED", "La sessió no és vàlida")
-    user.sessions.filter(token=token).delete()
-
-
-def find_by_session_token(token):
-    session = (
-        Session.objects.filter(token=token, expires_at__gte=timezone.now())
-        .select_related("user")
-        .first()
+    # Initial "Kofre" account. The original names the factory method
+    # createWithZeroBalance but opens the account with 100.
+    Account.objects.create(
+        id=ids.generate("ACC"),
+        name="Kofre",
+        bank="Kofre Bank",
+        balance=v.money_amount(100),
+        currency="EUR",
+        iban=v.random_spanish_iban(),
+        user_id=user.id,
     )
-    return session.user if session else None
-
-
-def validate(dni, token):
-    """Return the session's user or raise. Also used by the authentication class."""
-    if not has_text(dni):
-        if not has_text(token):
-            raise AppError("UNAUTHORIZED", "Token de sessió obligatori")
-        user = find_by_session_token(token)
-        if user is None:
-            raise AppError("UNAUTHORIZED", "Sessió no vàlida")
-        return user
-    _validate_session_data(dni, token)
-    user = find_by_dni(dni)
-    if user is None:
-        raise AppError("USER_NOT_FOUND", "Usuari inexistent")
-    if not user.check_session(token):
-        raise AppError("UNAUTHORIZED", "Sessió expirada o inexistent")
-    return user
-
-
-def exists(dni):
-    if not has_text(dni) or find_by_dni(dni.strip()) is None:
-        raise AppError("USER_NOT_FOUND", "L'usuari no existeix al sistema")
+    return REGISTERED
 
 
 # ---------------------------------------------------------------- users
@@ -285,23 +194,28 @@ def update_phone(dni, pin, prefix, number):
         raise AppError("APPLICATION_ERROR", "Cal informar 'prefix' i 'number' per actualitzar.")
     if (prefix, number) != (user.phone_prefix, user.phone_number):
         try:
-            user.phone_prefix, user.phone_number = v.validate_phone(prefix, number)
+            user.set_phone(*v.validate_phone(prefix, number))
         except ValueError as exc:
             raise AppError("INVALID_PHONE_FORMAT", str(exc)) from None
     user.save()
     return user_response(user)
 
 
-def update_password(dni, pin, password):
+def update_password(dni, pin, password, keep_token=None):
     user = _user_with_pin(dni, pin)
     if not has_text(password):
         raise AppError("APPLICATION_ERROR", "Cal informar 'password' per actualitzar.")
-    if user.password != password:
-        try:
-            user.password = v.validate_password(password)
-        except ValueError as exc:
-            raise AppError("INVALID_PASSWORD_FORMAT", str(exc)) from None
+    #if user.password != password:
+    #    try:
+    #        user.password = v.validate_password(password)
+    #    except ValueError as exc:
+    #        raise AppError("INVALID_PASSWORD_FORMAT", str(exc)) from None
+    try:
+            user.set_password(v.validate_password(password))
+    except ValueError as exc:
+        raise AppError("INVALID_PASSWORD_FORMAT", str(exc)) from None
     user.save()
+    revoke_tokens(user, keep=keep_token)
     return user_response(user)
 
 
@@ -309,9 +223,9 @@ def update_pin(dni, pin, new_pin):
     user = _user_with_pin(dni, pin)
     if not has_text(new_pin):
         raise AppError("APPLICATION_ERROR", "Cal informar 'pin' per actualitzar.")
-    if new_pin != user.pin:
+    if not user.check_pin(new_pin):
         try:
-            user.pin = v.validate_user_pin(new_pin)
+            user.set_pin(v.validate_user_pin(new_pin))
         except ValueError as exc:
             raise AppError("INVALID_PIN_FORMAT", str(exc)) from None
     user.save()
@@ -319,14 +233,24 @@ def update_pin(dni, pin, new_pin):
 
 
 def delete_user(dni, pin):
-    # Only the user (and their sessions) is removed. Accounts, cards and
-    # payments are left behind, as in the original.
-    _require_pin(dni, pin).delete()
+    """Erase the user with their sessions, accounts and cards.
 
+    Payments are kept: each one is also the other party's history, and they
+    refer only to IBANs, not to the person.
+    """
+    user = _require_pin(dni, pin)
+    with transaction.atomic():
+        account_ids = list(Account.objects.filter(user_id=user.id).values_list("id", flat=True))
+        Card.objects.filter(account_id__in=account_ids).delete()
+        Account.objects.filter(id__in=account_ids).delete()
+        user.delete()
 
 def verify_pin(dni, pin):
-    return {"pin": _user_with_pin(dni, pin).pin}
+    _user_with_pin(dni, pin)
+    return {"verified": True}
 
 
 def verify_password(dni, pin):
-    return {"password": _user_with_pin(dni, pin).password}
+    #return {"password": _user_with_pin(dni, pin).password}
+    _user_with_pin(dni, pin)
+    return {"verified":True}

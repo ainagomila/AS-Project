@@ -1,0 +1,3 @@
+security-reports/
+backend/.certs/
+.env

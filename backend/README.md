@@ -1,59 +1,75 @@
 # Kofre backend (Django)
 
-Django + Django REST Framework port of the Kofre banking backend. Local use only.
+Django + Django REST Framework backend of Kofre: OAuth 2.0 / OpenID Connect
+provider, XACML-enforced REST API and field encryption. Local use only.
 
 ## Setup
 
-Requires [uv](https://docs.astral.sh/uv/) and Python 3.13.
+Requires [uv](https://docs.astral.sh/uv/), Python 3.13, PostgreSQL and
+[mkcert](https://github.com/FiloSottile/mkcert). With Docker none of this is
+needed: see the root [README](../README.md).
 
 ```sh
 cd backend
 uv sync
+export DJANGO_DEBUG=1   # development defaults; otherwise see .env.example
+export POSTGRES_HOST=127.0.0.1   # default is "db", the Compose service
+mkdir -p .env.d && openssl genrsa -out .env.d/oidc.key 2048   # settings load it: needed first
 uv run python manage.py generate_key   # writes .env.d/encryptionKey64.json
-uv run python manage.py migrate
 # Debian/Ubuntu only: needed for Firefox to trust the local certificate
 sudo apt install libnss3-tools
 mkcert -install
-mkdir .certs
+mkdir -p .certs
 mkcert -cert-file .certs/localhost.pem -key-file .certs/localhost-key.pem localhost 127.0.0.1 ::1 backend
+cp "$(mkcert -CAROOT)/rootCA.pem" .certs/rootCA.pem
+uv run python manage.py migrate
+uv run python manage.py create_oauth_client
 uv run python manage.py runserver_https 8080
 ```
 
 The API is then at `https://localhost:8080`. The frontend's HTTPS dev proxy
-expects that port.
+expects that port. Adding a card also needs the verifier service (see the root
+README).
 
-The field-encryption key can also be given as `SECURITY_ENCRYPTION_KEY_BASE64`
-(32 random bytes, base64). See `.env.example`.
+The OIDC key can also be given as `OIDC_RSA_PRIVATE_KEY`, the field-encryption
+key as `SECURITY_ENCRYPTION_KEY_BASE64` (32 random bytes, base64). See
+`.env.example`.
 
-The Docker startup script installs `mkcert` when necessary, then creates and
-trusts the local certificate before starting the containers.
-
-## Roles and administration
-
-Every user has a `role`: `USER` (customer, default), `ADMIN` (full management)
-or `AUDITOR` (read-only compliance access). The login response's `user` object
-carries both `role` and a boolean `admin` convenience flag.
-
-The first administrator is created after registering a user through the app:
+With `DJANGO_DEBUG` off (the default) `DJANGO_SECRET_KEY` and `POSTGRES_PASSWORD`
+are required; only debug mode and the test suite fall back to development values.
+A production-like configuration passes `check --deploy`:
 
 ```sh
-uv run python manage.py create_admin <dni>
-# or, to create an auditor instead:
-uv run python manage.py create_admin <dni> --role AUDITOR
+DJANGO_SECRET_KEY="$(openssl rand -base64 48)" POSTGRES_PASSWORD=x \
+  DJANGO_ALLOWED_HOSTS=localhost uv run python manage.py check --deploy
 ```
 
-Administrator endpoints live under `/admin` and are protected by a centralised
-policy layer (`iam/permissions.py`); every mutation is written to the audit log.
-Administrators can manage users (create, enable/disable, change role, reset
-password, delete), accounts (freeze/unfreeze), cards (block/delete), review all
-transfers and the audit log, and change system settings (`SESSION_TTL_SECONDS`,
-`REGISTRATION_ENABLED`, `TRANSFER_MAX_AMOUNT`, `MAINTENANCE_MODE`,
-`LOGIN_MAX_ATTEMPTS`, `LOGIN_LOCKOUT_SECONDS`). Auditors can only read.
+## Field encryption
+
+DNI, email, phone number, PAN and card PIN are stored as AES-256-GCM
+`v1:<key id>:<nonce>:<ciphertext>`, bound to `<table>.<column>.<row id>` as
+associated data. DNI, phone and PAN lookups use an HMAC-SHA256 blind index under a
+separate key. `generate_key --rotate` adds a new current key; old values still
+decrypt. Passwords and the user PIN are not encrypted but hashed with Argon2id.
+
+## Roles
+
+Register a user through the app, then:
+
+```sh
+uv run python manage.py set_role <dni> admin   # or auditor, or customer
+```
+
+`create_admin <dni>` is the same as `set_role <dni> admin`.
 
 ## Tests
 
+The tests need PostgreSQL and `.env.d/oidc.key`; they set their own encryption
+key and fall back to the development secret key and database password
+(`password`, user `user`). With the throwaway container from the root README:
+
 ```sh
-uv run pytest
+POSTGRES_HOST=127.0.0.1 POSTGRES_PORT=5432 uv run pytest
 ```
 
 ## Layout
@@ -61,8 +77,9 @@ uv run pytest
 | Path | Contents |
 |---|---|
 | `kofre/` | Settings and root URLs |
-| `common/` | Error type and handler, AES field encryption, validators, ID generator |
-| `iam/` | Users, sessions, `/auth`, `/users`, `/admin` |
+| `common/` | Errors, field encryption, lockout, CSP, validators, `runserver_https` |
+| `iam/` | Users, OAuth login page and client, `/auth`, `/users`, `/admin` |
+| `authz/` | XACML policy, PDP, PIP, PEP and audit trail |
 | `banking/` | Accounts and cards |
 | `payments/` | Transfers |
 | `tests/` | Contract tests per endpoint |

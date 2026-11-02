@@ -7,6 +7,9 @@ from . import services
 
 
 class TransfersView(AuthenticatedView):
+    resource_type = "account"
+    actions = {"GET": "list-transfers", "POST": "transfer"}
+
     def get(self, request, dni, iban):
         params = request.query_params
         return Response(

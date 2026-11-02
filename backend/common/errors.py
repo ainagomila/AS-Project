@@ -11,14 +11,14 @@ from django.http import Http404
 from rest_framework import exceptions as drf_exceptions
 from rest_framework.response import Response
 
-NOT_FOUND = {"USER_NOT_FOUND", "ACCOUNT_NOT_FOUND", "CARD_NOT_FOUND", "BANK_NOT_FOUND","SETTING_NOT_FOUND"}
+from . import lockout
+
+NOT_FOUND = {"USER_NOT_FOUND", "ACCOUNT_NOT_FOUND", "CARD_NOT_FOUND", "BANK_NOT_FOUND"}
 CONFLICT = {
     "USER_ALREADY_EXISTS",
     "ACCOUNT_ALREADY_EXISTS",
     "CARD_ALREADY_EXISTS",
     "PASSWORD_ALREADY_EXISTS",
-    "LAST_ADMIN",
-    "CANNOT_MODIFY_SELF",
 }
 BAD_REQUEST = {
     "INVALID_DNI_FORMAT",
@@ -29,6 +29,7 @@ BAD_REQUEST = {
     "INVALID_IBAN_FORMAT",
     "INVALID_PAN_FORMAT",
     "INVALID_CVV_FORMAT",
+    "INVALID_CARD",
     "INVALID_EXPIRATION_DATE_FORMAT",
     "INVALID_STATUS_FORMAT",
     "INVALID_TYPE_FORMAT",
@@ -46,14 +47,10 @@ UNPROCESSABLE = {
     "USER_CANNOT_BE_MODIFIED",
     "APPLICATION_ERROR",
     "INVALID_PIN",
-    "ACCOUNT_FROZEN",
 }
 # UNAUTHORIZED maps to 403 in the original ProblemMapper. FORBIDDEN and
 # USER_DISABLED are new codes introduced with the administrator role.
-FORBIDDEN = {"UNAUTHORIZED", "FORBIDDEN", "USER_DISABLED", "REGISTRATION_DISABLED"}
-# Account lockout (login throttling) and maintenance mode.
-LOCKED = {"ACCOUNT_LOCKED"}
-UNAVAILABLE = {"MAINTENANCE_MODE"}
+FORBIDDEN = {"UNAUTHORIZED", "FORBIDDEN", "USER_DISABLED"}
 
 STATUS_BY_CODE = {
     **{c: 404 for c in NOT_FOUND},
@@ -61,8 +58,6 @@ STATUS_BY_CODE = {
     **{c: 400 for c in BAD_REQUEST},
     **{c: 422 for c in UNPROCESSABLE},
     **{c: 403 for c in FORBIDDEN},
-    **{c: 423 for c in LOCKED},
-    **{c: 503 for c in UNAVAILABLE},
     "INFRA_ERROR": 500,
     "INTERNAL_ERROR": 500,
 }
@@ -87,6 +82,11 @@ class BareUnauthorized(Exception):
 
 
 def exception_handler(exc, context):
+    if isinstance(exc, AppError) and exc.code == "INVALID_PIN":
+        lockout.record_failure(lockout.pin_key(context["request"], context["kwargs"]))
+    if isinstance(exc, drf_exceptions.Throttled):
+        message = "Massa intents. Torna-ho a provar més tard."
+        return Response({"code": "TOO_MANY_ATTEMPTS", "message": message, "metadata": {}}, status=429)
     if isinstance(exc, AppError):
         return Response(
             {"code": exc.code, "message": exc.message, "metadata": exc.metadata},

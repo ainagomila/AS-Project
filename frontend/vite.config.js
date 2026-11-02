@@ -4,10 +4,13 @@ import fs from 'node:fs'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
+import path from 'node:path'
 
 const HTTPS_CERT = process.env.VITE_HTTPS_CERT || '../backend/.certs/localhost.pem'
 const HTTPS_KEY = process.env.VITE_HTTPS_KEY || '../backend/.certs/localhost-key.pem'
 const configuredApiProxyTarget = process.env.VITE_API_PROXY_TARGET
+const ROOT_CA = path.join(path.dirname(HTTPS_CERT), 'rootCA.pem')
+const PROXY_CA = fs.existsSync(ROOT_CA) ? ROOT_CA : HTTPS_CERT
 const certificateFilesExist =
   fs.existsSync(HTTPS_CERT) && fs.existsSync(HTTPS_KEY)
 const httpsRequested =
@@ -65,7 +68,7 @@ export default defineConfig({
       '/api': {
         target: API_PROXY_TARGET,
         secure: httpsEnabled,
-        ...(httpsEnabled ? { ca: fs.readFileSync(HTTPS_CERT) } : {}),
+        ...(httpsEnabled ? { ca: fs.readFileSync(PROXY_CA) } : {}),
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
@@ -82,9 +85,6 @@ export default defineConfig({
 
   test: {
     environment: 'jsdom',
-    environmentMatchGlobs: [
-      ['src/test/integration/**', 'node'],
-    ],
     globals: true,
     setupFiles: ['./src/test/setup.js'],
     exclude: [

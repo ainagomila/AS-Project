@@ -117,7 +117,7 @@ export async function getAccounts(dni) {
     return data.accounts
   }
 
-  console.warn('Formato inesperado en GET /accounts:', data)
+  console.warn('Formato inesperado en GET /accounts')
   return []
 }
 
@@ -133,7 +133,7 @@ export async function getAccount(dni, iban) {
 
 /**
  * Crea una nueva cuenta.
- * account = { iban, name, bank, balance, currency }
+ * account = { iban, name, bank, currency }; new accounts open at 0
  */
 export async function addAccount(dni, account) {
   const { data } = await apiClient.post(`/users/${encodeURIComponent(dni)}/accounts`, account)
@@ -200,7 +200,7 @@ export async function getCards(dni) {
   if (Array.isArray(data)) return data
   if (data && Array.isArray(data.cards)) return data.cards
 
-  console.warn('Formato inesperado en GET /users/{dni}/cards:', data)
+  console.warn('Formato inesperado en GET /users/{dni}/cards')
   return []
 }
 
@@ -250,7 +250,6 @@ export async function getCardByPan(dni, pan) {
 export async function verifyCard(dni, accountId, pan, pin) {
   const url = `/users/${encodeURIComponent(dni)}/accounts/${encodeURIComponent(accountId)}/cards/${encodeURIComponent(pan)}/security/verify-card`
 
-  console.log('[verifyCardSensible] sending:', dni, accountId, pan, pin)
 
   const res = await apiClient.post(url, { pin })
 
@@ -308,18 +307,10 @@ export async function getTransfers(dni, iban, query = {}) {
     if (query.to) params.to = query.to
     if (query.sort) params.sort = query.sort
 
-    console.log('API Call:', {
-      dni,
-      iban: cleanIban,
-      params,
-    })
-
     const { data } = await apiClient.get(
       `/users/${encodeURIComponent(dni)}/accounts/${encodeURIComponent(cleanIban)}/transfers`,
       { params },
     )
-
-    console.log('API Response:', data)
 
     // Caso ideal: array directo
     if (Array.isArray(data)) {
@@ -337,7 +328,7 @@ export async function getTransfers(dni, iban, query = {}) {
     }
 
     // ⚠️ Formato desconocido
-    console.warn('Formato inesperado en GET /transfers:', data)
+    console.warn('Formato inesperado en GET /transfers')
     return []
   } catch (error) {
     console.error('Error in getTransfers:', {

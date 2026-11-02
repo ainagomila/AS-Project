@@ -1,6 +1,6 @@
 from rest_framework.response import Response
-from rest_framework.views import APIView
 
+from authz.pep import PolicyEnforcedView
 from common.http import text
 from common.validators import has_text
 
@@ -10,37 +10,23 @@ from .authentication import KofreTokenAuthentication
 
 # ------------------------------------------------------------- /auth (public)
 
-class RegisterView(APIView):
+class PublicView(PolicyEnforcedView):
+    authentication_classes = []
+    resource_type = "public"
+
+
+class RegisterView(PublicView):
+    actions = {"POST": "register"}
+
     def post(self, request):
         fields = ("name", "dni", "email", "phone", "password", "birthdate", "gender", "pin")
         body = services.register(**{f: text(request, f) for f in fields})
         return Response(body, status=201)
 
 
-class LoginView(APIView):
-    def post(self, request):
-        return Response(services.login(text(request, "dni"), text(request, "password")))
+class ResetPasswordView(PublicView):
+    actions = {"POST": "reset-password"}
 
-
-class LogoutView(APIView):
-    def post(self, request):
-        services.logout(text(request, "dni"), text(request, "token"))
-        return Response(status=204)
-
-
-class ValidateView(APIView):
-    def post(self, request):
-        services.validate(text(request, "dni"), text(request, "token"))
-        return Response(status=204)
-
-
-class ExistsView(APIView):
-    def get(self, request, dni):
-        services.exists(dni)
-        return Response(True)
-
-
-class ResetPasswordView(APIView):
     def post(self, request):
         services.update_password(
             text(request, "dni"), text(request, "pin"), text(request, "newPassword")
@@ -50,16 +36,22 @@ class ResetPasswordView(APIView):
 
 # ------------------------------------------------------------- /users (token)
 
-class AuthenticatedView(APIView):
+class AuthenticatedView(PolicyEnforcedView):
     authentication_classes = [KofreTokenAuthentication]
 
 
 class UserListView(AuthenticatedView):
+    resource_type = "user-directory"
+    actions = {"GET": "list-users"}
+
     def get(self, request):
         return Response(services.list_users())
 
 
 class UserDetailView(AuthenticatedView):
+    resource_type = "user"
+    actions = {"GET": "read", "PATCH": "update", "DELETE": "delete"}
+
     def get(self, request, dni):
         return Response(services.get_user(dni))
 
@@ -76,7 +68,7 @@ class UserDetailView(AuthenticatedView):
             prefix, number = services.split_update_phone(phone)
             result = services.update_phone(dni, pin, prefix, number)
         if has_text(password):
-            result = services.update_password(dni, pin, password)
+            result = services.update_password(dni, pin, password, keep_token=request.auth)
         if has_text(new_pin):
             result = services.update_pin(dni, pin, new_pin)
         if result is None:
@@ -90,10 +82,16 @@ class UserDetailView(AuthenticatedView):
 
 
 class VerifyPinView(AuthenticatedView):
+    resource_type = "user"
+    actions = {"POST": "verify-pin"}
+
     def post(self, request, dni):
         return Response(services.verify_pin(dni, text(request, "pin")))
 
 
 class VerifyPasswordView(AuthenticatedView):
+    resource_type = "user"
+    actions = {"POST": "verify-password"}
+
     def post(self, request, dni):
         return Response(services.verify_password(dni, text(request, "pin")))

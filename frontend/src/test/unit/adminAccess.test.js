@@ -9,31 +9,19 @@ describe('admin access', () => {
     setActivePinia(createPinia())
   })
 
-  it('exposes the admin flag from the login payload', () => {
+  it('exposes the role from the profile', () => {
     const store = useUserStore()
-    store.login('12345678Z', { token: 't', user: { dni: '12345678Z', admin: true } })
-    expect(store.isAdmin).toBe(true)
+    store.login('12345678Z', { dni: '12345678Z', role: 'admin', admin: true })
+    expect([store.isAdmin, store.isAuditor, store.isStaff]).toEqual([true, false, true])
 
-    store.login('12345678Z', { token: 't', user: { dni: '12345678Z', admin: false } })
-    expect(store.isAdmin).toBe(false)
+    store.login('12345678Z', { dni: '12345678Z', role: 'auditor', admin: false })
+    expect([store.isAdmin, store.isAuditor, store.isStaff]).toEqual([false, true, true])
+
+    store.login('12345678Z', { dni: '12345678Z', role: 'customer', admin: false })
+    expect([store.isAdmin, store.isAuditor, store.isStaff]).toEqual([false, false, false])
   })
 
-  it('derives the role from the login payload', () => {
-    const store = useUserStore()
-    store.login('12345678Z', { token: 't', user: { dni: '12345678Z', role: 'ADMIN' } })
-    expect(store.isAdmin).toBe(true)
-    expect(store.isStaff).toBe(true)
-
-    store.login('12345678Z', { token: 't', user: { dni: '12345678Z', role: 'AUDITOR' } })
-    expect(store.isAdmin).toBe(false)
-    expect(store.isStaff).toBe(true)
-
-    store.login('12345678Z', { token: 't', user: { dni: '12345678Z', role: 'USER' } })
-    expect(store.isAdmin).toBe(false)
-    expect(store.isStaff).toBe(false)
-  })
-
-  it('marks the admin route as staff-only', () => {
+  it('marks the back office route as staff-only', () => {
     const admin = router.getRoutes().find((route) => route.name === 'Admin')
     expect(admin?.meta).toMatchObject({ requiresAuth: true, requiresStaff: true })
   })

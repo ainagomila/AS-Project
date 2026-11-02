@@ -8,17 +8,32 @@ from common import validators as v
 from common.errors import STATUS_BY_CODE, AppError
 
 
-def test_aes_round_trip_uses_fresh_iv():
-    first, second = crypto.encrypt("Secret_123"), crypto.encrypt("Secret_123")
+AAD = "iam_user.email_enc.USER-1"
+
+
+def test_aes_round_trip_uses_fresh_nonce_and_records_the_key_id():
+    first, second = crypto.encrypt("Secret_123", AAD), crypto.encrypt("Secret_123", AAD)
     assert first != second
-    assert crypto.decrypt(*first) == "Secret_123"
+    assert first.startswith("v1:k1:")
+    assert crypto.decrypt(first, AAD) == "Secret_123"
 
 
-def test_aes_rejects_tampered_ciphertext():
-    iv, cipher, tag = crypto.encrypt("123456")
-    other_iv, other_cipher, other_tag = crypto.encrypt("654321")
+def test_aes_rejects_tampered_ciphertext_and_other_cells():
+    version, kid, nonce, _ = crypto.encrypt("123456", AAD).split(":")
+    other = crypto.encrypt("654321", AAD).split(":")[3]
     with pytest.raises(InvalidTag):
-        crypto.decrypt(iv, other_cipher, tag)
+        crypto.decrypt(f"{version}:{kid}:{nonce}:{other}", AAD)
+    token = crypto.encrypt("123456", AAD)
+    for aad in ["iam_user.email_enc.USER-2", "iam_user.dni_enc.USER-1"]:
+        with pytest.raises(InvalidTag):
+            crypto.decrypt(token, aad)
+
+
+def test_blind_index_is_keyed_and_separated_by_purpose():
+    index = crypto.blind_index("12345678Z", "iam_user.dni_index")
+    assert len(index) == 64 and "12345678" not in index
+    assert index == crypto.blind_index("12345678Z", "iam_user.dni_index")
+    assert index != crypto.blind_index("12345678Z", "banking_card.pan_index")
 
 
 @pytest.mark.parametrize("dni", ["12345678Z", " 12345678z ", "X1234567L"])

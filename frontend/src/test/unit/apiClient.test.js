@@ -1,5 +1,9 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import apiClient from '@/api/apiClient'
+
+const mocks = vi.hoisted(() => ({ getUser: vi.fn() }))
+
+vi.mock('@/api/oidc', () => ({ userManager: { getUser: mocks.getUser } }))
 
 const REMOTE_BASE_URL = 'https://localhost:8080/'
 const EXPECTED_BASE_URL =
@@ -16,7 +20,7 @@ function getAuthHandler() {
 
 describe('apiClient', () => {
   beforeEach(() => {
-    localStorage.clear()
+    mocks.getUser.mockReset()
   })
 
   it('keeps axios defaults lean but preserves content-type header', () => {
@@ -38,17 +42,21 @@ describe('apiClient', () => {
     expect(config.url).toBe(absoluteUrl)
   })
 
-  it('injects bearer token when present', () => {
-    localStorage.setItem('authToken', 'abc123')
-    const handler = getAuthHandler()
-    const config = handler({ headers: {} })
+  it('injects the in-memory access token when the user is signed in', async () => {
+    mocks.getUser.mockResolvedValue({ access_token: 'abc123', expired: false })
+    const config = await getAuthHandler()({ headers: {} })
     expect(config.headers.Authorization).toBe('Bearer abc123')
   })
 
-  it('does not add authorization header when token missing', () => {
-    localStorage.removeItem('authToken')
-    const handler = getAuthHandler()
-    const config = handler({ headers: {} })
+  it('does not add authorization header without a user', async () => {
+    mocks.getUser.mockResolvedValue(null)
+    const config = await getAuthHandler()({ headers: {} })
+    expect(config.headers.Authorization).toBeUndefined()
+  })
+
+  it('does not send an expired token', async () => {
+    mocks.getUser.mockResolvedValue({ access_token: 'old', expired: true })
+    const config = await getAuthHandler()({ headers: {} })
     expect(config.headers.Authorization).toBeUndefined()
   })
 })

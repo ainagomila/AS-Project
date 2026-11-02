@@ -1,4 +1,5 @@
 ﻿import { expect, Locator, Page } from '@playwright/test'
+import { API_BASE_URL } from './env'
 import { TestUser } from './testData'
 
 const floatingFieldSelector = ':is(.input-field, .form-field)'
@@ -44,23 +45,28 @@ export async function completeSignupForm(
     }
 }
 
+// The app has no login form of its own: /login redirects to the backend's OAuth login page.
+export async function submitLoginForm(page: Page, credentials: { dni: string; password: string }) {
+    await page.locator('#id_username').fill(credentials.dni)
+    await page.locator('#id_password').fill(credentials.password)
+    await page.locator('.login-btn').click()
+}
+
 export async function logInThroughUi(page: Page, credentials: { dni: string; password: string }) {
     await page.goto('/login')
-    await page.getByTestId('login-dni-input').fill(credentials.dni)
-    await page.getByTestId('login-password-input').fill(credentials.password)
-    const [response] = await Promise.all([
-        page.waitForResponse((res) =>
-            res.url().includes('/auth/login') && res.request().method() === 'POST',
-        ),
-        page.getByTestId('login-submit-btn').click(),
-    ])
-
-    if (!response.ok()) {
-        const body = await response.text().catch(() => '')
-        throw new Error(`Login request failed: ${response.status()} ${body}`)
-    }
-
+    await expect(page).toHaveURL(/\/accounts\/login\//)
+    await submitLoginForm(page, credentials)
     await expect(page).toHaveURL(/\/dashboard$/)
+}
+
+// Makes every API call from this page carry a bad token, to exercise the 401 path.
+// (Tokens live in memory only, so the test cannot overwrite them from storage.)
+export async function useInvalidAccessToken(page: Page) {
+    await page.route((url) => url.href.startsWith(`${API_BASE_URL}/`) || url.pathname.startsWith('/api/'), (route) =>
+        route.fallback({
+            headers: { ...route.request().headers(), authorization: 'Bearer invalid-token' },
+        }),
+    )
 }
 
 export async function fillPinInputs(container: Locator, pin: string) {
@@ -75,7 +81,6 @@ export type AccountFormData = {
     iban: string
     name: string
     bank: string
-    balance: number
     currency: string
 }
 
@@ -84,7 +89,6 @@ export async function createAccountViaUi(page: Page, account: AccountFormData) {
     await page.getByTestId('add-account-iban-input').fill(account.iban)
     await page.getByTestId('add-account-name-input').fill(account.name)
     await page.getByTestId('add-account-bank-input').fill(account.bank)
-    await page.getByTestId('add-account-balance-input').fill(String(account.balance))
     await page.getByTestId('add-account-currency-select').selectOption(account.currency)
     await page.getByTestId('add-account-submit-btn').click()
     const newAccountCard = page.locator('.account-card', { hasText: account.name }).first()

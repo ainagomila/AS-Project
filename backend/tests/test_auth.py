@@ -2,22 +2,22 @@ from datetime import timedelta
 
 import pytest
 from django.utils import timezone
+from oauth2_provider.models import AccessToken, Application, RefreshToken
 
 from banking.models import Account
-from iam.models import Session, User
+from iam.models import User
 
-from .conftest import DNI_A, DNI_B, PASSWORD, PIN, register_payload
+from .conftest import DNI_A, DNI_B, PIN, register_payload
 
 pytestmark = pytest.mark.django_db
 
 
-def test_register_creates_user_session_and_initial_account(client):
+def test_register_creates_user_and_initial_account(client):
     response = client.post("/auth/register", register_payload(), format="json")
     assert response.status_code == 201
     body = response.json()
-    assert body["message"] == "User registered successfully"
-    user = User.objects.get(dni=DNI_A)
-    assert Session.objects.filter(user=user, token=body["token"]).exists()
+    assert body["message"] == "Registration received. Log in to continue."
+    user = User.objects.get_by_natural_key(DNI_A)
     account = Account.objects.get(user_id=user.id)
     assert (account.name, account.bank, account.currency) == ("Kofre", "Kofre Bank", "EUR")
 
@@ -43,76 +43,32 @@ def test_register_validation_errors(client, overrides, status, code):
     assert set(response.json()) == {"code", "message", "metadata"}
 
 
-def test_register_duplicates(client, ana):
+def test_register_duplicates_get_the_same_answer_as_a_new_user(client, ana):
+    new = client.post("/auth/register", register_payload(DNI_B, "+34622222222"), format="json")
+    User.objects.get_by_natural_key(DNI_B).delete()
     same_dni = client.post("/auth/register", register_payload(phone="+34611111111"), format="json")
     same_phone = client.post("/auth/register", register_payload(dni=DNI_B), format="json")
-    assert (same_dni.status_code, same_dni.json()["code"]) == (409, "USER_ALREADY_EXISTS")
-    assert (same_phone.status_code, same_phone.json()["code"]) == (409, "USER_ALREADY_EXISTS")
+    assert (same_dni.status_code, same_dni.json()) == (new.status_code, new.json())
+    assert (same_phone.status_code, same_phone.json()) == (new.status_code, new.json())
+    assert User.objects.count() == 1
+    assert User.objects.get_by_natural_key(DNI_A).phone == "+34600123456"
 
 
-def test_login_returns_token_and_user(client, ana):
-    response = client.post("/auth/login", {"dni": DNI_A, "password": PASSWORD}, format="json")
-    assert response.status_code == 200
-    body = response.json()
-    assert body["token"] != ana.token
-    assert body["user"] == {
-        "dni": DNI_A,
-        "name": "Ana Blanco",
-        "email": "user1234@example.com",
-        "phone": "+34600123456",
-        "birthdate": "1995-04-10",
-        "gender": "FEMALE",
-        "role": "USER",
-        "admin": False,
-    }
-
-
-def test_login_errors(client, ana):
-    wrong = client.post("/auth/login", {"dni": DNI_A, "password": "Nope_1234"}, format="json")
-    unknown = client.post("/auth/login", {"dni": DNI_B, "password": PASSWORD}, format="json")
-    empty = client.post("/auth/login", {"dni": DNI_A}, format="json")
-    assert (wrong.status_code, wrong.json()["code"]) == (400, "INVALID_CREDENTIALS")
-    assert (unknown.status_code, unknown.json()["code"]) == (404, "USER_NOT_FOUND")
-    assert (empty.status_code, empty.json()["code"]) == (400, "INVALID_CREDENTIALS")
-
-
-def test_validate_and_logout(client, ana):
-    session = {"dni": DNI_A, "token": ana.token}
-    assert client.post("/auth/validate", session, format="json").status_code == 204
-    assert client.post("/auth/logout", session, format="json").status_code == 204
-    after = client.post("/auth/validate", session, format="json")
-    assert (after.status_code, after.json()["code"]) == (403, "UNAUTHORIZED")
-    assert ana.client.get(ana.url()).status_code == 401
-
-
-def test_session_request_errors(client, ana):
-    missing = client.post("/auth/validate", {}, format="json")
-    no_dni = client.post("/auth/logout", {"token": ana.token}, format="json")
-    unknown = client.post("/auth/logout", {"dni": DNI_B, "token": ana.token}, format="json")
-    assert (missing.status_code, missing.json()["code"]) == (403, "UNAUTHORIZED")
-    assert (no_dni.status_code, no_dni.json()["code"]) == (400, "INVALID_DNI_FORMAT")
-    assert (unknown.status_code, unknown.json()["code"]) == (404, "USER_NOT_FOUND")
-
-
-def test_exists(client, ana):
-    found = client.get(f"/auth/exists/{DNI_A}")
-    assert (found.status_code, found.json()) == (200, True)
-    missing = client.get(f"/auth/exists/{DNI_B}")
-    assert (missing.status_code, missing.json()["code"]) == (404, "USER_NOT_FOUND")
+def test_exists_endpoint_is_gone(client, ana):
+    assert client.get(f"/auth/exists/{DNI_A}").status_code == 404
 
 
 def test_reset_password_with_pin(client, ana):
     body = {"dni": DNI_A, "pin": PIN, "newPassword": "Brand_New_1"}
     assert client.post("/auth/reset-password", body, format="json").status_code == 204
-    login = client.post("/auth/login", {"dni": DNI_A, "password": "Brand_New_1"}, format="json")
-    assert login.status_code == 200
+    assert User.objects.get_by_natural_key(DNI_A).check_password("Brand_New_1")
 
     wrong_pin = client.post("/auth/reset-password", {**body, "pin": "000000"}, format="json")
     weak = client.post("/auth/reset-password", {**body, "newPassword": "weak"}, format="json")
     unknown = client.post("/auth/reset-password", {**body, "dni": DNI_B}, format="json")
     assert (wrong_pin.status_code, wrong_pin.json()["code"]) == (422, "INVALID_PIN")
     assert (weak.status_code, weak.json()["code"]) == (400, "INVALID_PASSWORD_FORMAT")
-    assert (unknown.status_code, unknown.json()["code"]) == (404, "USER_NOT_FOUND")
+    assert (unknown.status_code, unknown.json()) == (wrong_pin.status_code, wrong_pin.json())
 
 
 def test_protected_routes_need_a_matching_live_token(client, ana, bob):
@@ -120,13 +76,39 @@ def test_protected_routes_need_a_matching_live_token(client, ana, bob):
     assert client.get(ana.url(), HTTP_AUTHORIZATION="Token abc").status_code == 401
     assert client.get(ana.url(), HTTP_AUTHORIZATION="Bearer nope").status_code == 401
     other = bob.client.get(ana.url())
-    assert (other.status_code, other.content) == (401, b"")
+    assert (other.status_code, other.json()["code"]) == (403, "FORBIDDEN")
 
-    Session.objects.filter(token=ana.token).update(expires_at=timezone.now() - timedelta(seconds=1))
+    AccessToken.objects.filter(token=ana.token).update(expires=timezone.now() - timedelta(seconds=1))
     assert ana.client.get(ana.url()).status_code == 401
 
 
-def test_login_purges_expired_sessions(client, ana):
-    Session.objects.filter(token=ana.token).update(expires_at=timezone.now() - timedelta(hours=1))
-    client.post("/auth/login", {"dni": DNI_A, "password": PASSWORD}, format="json")
-    assert not Session.objects.filter(token=ana.token).exists()
+def _second_session(user_dni):
+    """Another signed-in device of the same user: an access token plus its refresh token."""
+    user = User.objects.get_by_natural_key(user_dni)
+    app = Application.objects.get(client_id="kofre-test-api")
+    access = AccessToken.objects.create(
+        user=user, application=app, token="other-device", scope="banking",
+        expires=timezone.now() + timedelta(minutes=5),
+    )
+    RefreshToken.objects.create(user=user, application=app, token="other-refresh", access_token=access)
+    return access
+
+
+def test_reset_password_revokes_every_session(client, ana):
+    other = _second_session(DNI_A)
+    body = {"dni": DNI_A, "pin": PIN, "newPassword": "Brand_New_1"}
+    assert client.post("/auth/reset-password", body, format="json").status_code == 204
+
+    assert ana.client.get(ana.url()).status_code == 401
+    assert not AccessToken.objects.filter(pk=other.pk).exists()
+    assert not RefreshToken.objects.filter(revoked__isnull=True).exists()
+
+
+def test_changing_the_password_keeps_only_the_current_session(ana):
+    other = _second_session(DNI_A)
+    changed = ana.client.patch(ana.url(), {"pin": PIN, "password": "Brand_New_1"}, format="json")
+    assert changed.status_code == 200
+
+    assert ana.client.get(ana.url()).status_code == 200
+    assert not AccessToken.objects.filter(pk=other.pk).exists()
+    assert not RefreshToken.objects.filter(token="other-refresh", revoked__isnull=True).exists()

@@ -1,152 +1,109 @@
-"""Administrator endpoints.
+"""Back-office endpoints for administrators and auditors.
 
-Authorization is centralised in `iam.permissions`: every view declares the
-roles that may call it through `permission_classes` (or `get_permissions` for
-the one mixed GET/POST route). Views stay thin and delegate to `admin_services`.
+Who may call what is decided by the XACML policy (authz/policies), not here:
+administrators list users and enable or disable customers; auditors read
+accounts and transfers, pseudonymised by the policy's masking obligation.
+
+Users and accounts are addressed by their internal ids, never by DNI or IBAN,
+so personal identifiers stay out of URLs and server logs.
 """
 
+from django.db import transaction
 from rest_framework.response import Response
-from rest_framework.views import APIView
 
-from common.http import text
+from banking.models import Account
+from common.errors import AppError
+from payments.services import payments_for_account
 
-from . import admin_services
-from .authentication import AnyTokenAuthentication
-from .models import Role
-from .permissions import IsAdmin, IsAdminOrAuditor
-
-
-class AdminView(APIView):
-    authentication_classes = [AnyTokenAuthentication]
+from . import services
+from .authentication import KofreTokenAuthentication
+from .models import User
+from authz.pep import PolicyEnforcedView
 
 
-class AdminReadView(AdminView):
-    permission_classes = [IsAdminOrAuditor]
+def _staff_user(user_id):
+    user = User.objects.filter(id=user_id).first()
+    if user is None:
+        raise AppError("USER_NOT_FOUND", "Usuari inexistent")
+    return user
 
 
-class AdminWriteView(AdminView):
-    permission_classes = [IsAdmin]
+def _staff_account(account_id):
+    account = Account.objects.filter(id=account_id).first()
+    if account is None:
+        raise AppError("ACCOUNT_NOT_FOUND", "Compte inexistent")
+    return account
 
 
-# ---------------------------------------------------------------- users
+def staff_user_response(user):
+    # Data minimisation: no birthdate or gender, which the back office never needs.
+    return {
+        "id": user.id,
+        "dni": user.dni,
+        "name": user.name,
+        "email": user.email,
+        "phone": user.phone,
+        "role": user.role,
+        "active": user.is_active,
+    }
 
-class AdminUsersView(AdminView):
-    def get_permissions(self):
-        if self.request.method.upper() == "POST":
-            return [IsAdmin()]
-        return [IsAdminOrAuditor()]
+
+def staff_account_response(account):
+    return {
+        "id": account.id,
+        "iban": account.iban,
+        "name": account.name,
+        "bank": account.bank,
+        "balance": float(account.balance),
+        "currency": account.currency,
+    }
+
+
+class StaffView(PolicyEnforcedView):
+    authentication_classes = [KofreTokenAuthentication]
+
+
+class AdminUserListView(StaffView):
+    resource_type = "staff-users"
+    actions = {"GET": "list-users"}
 
     def get(self, request):
-        return Response(admin_services.list_users())
-
-    def post(self, request):
-        body = admin_services.create_user(
-            request.user,
-            name=text(request, "name"),
-            dni=text(request, "dni"),
-            email=text(request, "email"),
-            phone=text(request, "phone"),
-            password=text(request, "password"),
-            birthdate=text(request, "birthdate"),
-            gender=text(request, "gender"),
-            pin=text(request, "pin"),
-            role=request.data.get("role") or Role.USER,
-            active=request.data.get("active", True),
-        )
-        return Response(body, status=201)
+        return Response([staff_user_response(u) for u in User.objects.order_by("name", "id")])
 
 
-class AdminUserDetailView(AdminView):
-    def get_permissions(self):
-        if self.request.method.upper() in ("PATCH", "DELETE", "POST"):
-            return [IsAdmin()]
-        return [IsAdminOrAuditor()]
+class AdminUserDetailView(StaffView):
+    resource_type = "staff-user"
+    actions = {"PATCH": "set-status"}
 
-    def get(self, request, dni):
-        return Response(admin_services.admin_user_response(admin_services._target_user(dni)))
-
-    def patch(self, request, dni):
-        return Response(admin_services.update_user(request.user, dni, request.data))
-
-    def delete(self, request, dni):
-        admin_services.delete_user(request.user, dni)
-        return Response(status=204)
-
-
-class AdminUserResetPasswordView(AdminWriteView):
-    def post(self, request, dni):
-        return Response(
-            admin_services.reset_user_password(request.user, dni, text(request, "newPassword"))
-        )
+    def patch(self, request, user_id):
+        active = request.data.get("active")
+        if not isinstance(active, bool):
+            raise AppError("MISSING_FIELDS", "Cal informar 'active' (true o false)")
+        with transaction.atomic():
+            user = _staff_user(user_id)
+            user.is_active = active
+            user.save(update_fields=["is_active"])
+            if not active:
+                services.revoke_tokens(user)
+        return Response(staff_user_response(user))
 
 
-# ---------------------------------------------------------------- accounts
+class AdminUserAccountsView(StaffView):
+    resource_type = "staff-user"
+    actions = {"GET": "list-accounts"}
 
-class AdminUserAccountsView(AdminReadView):
-    def get(self, request, dni):
-        return Response(admin_services.list_user_accounts(dni))
-
-
-class AdminAccountsView(AdminReadView):
-    def get(self, request):
-        return Response(admin_services.list_all_accounts())
+    def get(self, request, user_id):
+        _staff_user(user_id)
+        accounts = Account.objects.filter(user_id=user_id).order_by("name", "id")
+        return Response({"accounts": [staff_account_response(a) for a in accounts]})
 
 
-class AdminAccountDetailView(AdminWriteView):
-    def patch(self, request, iban):
-        return Response(admin_services.set_account_status(request.user, iban, text(request, "status")))
+class AdminAccountTransfersView(StaffView):
+    resource_type = "staff-account"
+    actions = {"GET": "list-transfers"}
 
-
-# ---------------------------------------------------------------- cards
-
-class AdminUserCardsView(AdminReadView):
-    def get(self, request, dni):
-        return Response(admin_services.list_user_cards(dni))
-
-
-class AdminCardsView(AdminReadView):
-    def get(self, request):
-        return Response(admin_services.list_all_cards())
-
-
-class AdminCardDetailView(AdminWriteView):
-    def patch(self, request, pan):
-        return Response(admin_services.set_card_status(request.user, pan, text(request, "status")))
-
-    def delete(self, request, pan):
-        admin_services.delete_card(request.user, pan)
-        return Response(status=204)
-
-
-# ---------------------------------------------------------------- transfers
-
-class AdminAccountTransfersView(AdminReadView):
-    def get(self, request, dni, iban):
-        return Response(admin_services.list_account_transfers(dni, iban))
-
-
-class AdminTransfersView(AdminReadView):
-    def get(self, request):
-        return Response(admin_services.list_all_transfers())
-
-
-# ---------------------------------------------------------------- audit + settings + stats
-
-class AdminAuditLogsView(AdminReadView):
-    def get(self, request):
-        return Response(admin_services.list_audit_logs())
-
-
-class AdminSettingsView(AdminReadView):
-    def get(self, request):
-        return Response(admin_services.list_settings())
-
-
-class AdminSettingDetailView(AdminWriteView):
-    def patch(self, request, key):
-        return Response(admin_services.update_setting(request.user, key, request.data.get("value")))
-
-
-class AdminStatsView(AdminReadView):
-    def get(self, request):
-        return Response(admin_services.stats())
+    def get(self, request, user_id, account_id):
+        account = _staff_account(account_id)
+        if account.user_id != user_id:
+            raise AppError("ACCOUNT_NOT_FOUND", "Compte inexistent")
+        return Response(payments_for_account(account.iban))

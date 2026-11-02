@@ -18,7 +18,7 @@
         <slot name="right">
           <!-- SOLO SE MUESTRAN SI NO ESTAMOS EN LOGIN / SIGNUP / TERMS -->
           <div v-if="!hideIcons" class="header-buttons">
-            <!-- ADMIN (administradores y auditores) -->
+            <!-- BACK OFFICE (administradores y auditores) -->
             <button
               v-if="userStore.isStaff"
               class="icon-btn"
@@ -55,8 +55,9 @@
 <script setup>
 import headerImg from '@/assets/header.png'
 import { useRouter, useRoute } from 'vue-router'
-import { ShieldCheck, Settings, LogOut } from 'lucide-vue-next'
+import { ShieldCheck, Settings, LogOut } from '@lucide/vue'
 import { useUserStore } from '@/stores/user'
+import { userManager } from '@/api/oidc'
 import { computed } from 'vue'
 
 defineProps({
@@ -96,7 +97,7 @@ const goToProfile = () => {
 
 const handleLogout = () => {
   userStore.logout()
-  router.push('/login')
+  userManager.signoutRedirect()
 }
 </script>
 

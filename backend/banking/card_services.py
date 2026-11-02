@@ -1,8 +1,13 @@
 """Card business rules, ported from CardCommandService and CardQueryService."""
 
 import calendar
+import json
 import re
+import urllib.error
+import urllib.request
 from datetime import date, datetime, timezone
+
+from django.conf import settings
 
 from common import ids
 from common import validators as v
@@ -30,7 +35,7 @@ def card_response(card, iban):
 
 
 def find_by_pan(pan):
-    return Card.objects.filter(pan=pan).first()
+    return Card.objects.find_by_pan(pan)
 
 
 def parse_expire_date(raw):
@@ -128,7 +133,7 @@ def get_owned_card_with_pin(dni, iban, pan, pin):
         raise AppError("USER_NOT_FOUND", "Usuari inexistent!")
     if not has_text(pin):
         raise AppError("INVALID_PIN_FORMAT", "El PIN és obligatori.")
-    if user.pin != pin:
+    if not user.check_pin(pin):
         raise AppError("INVALID_PIN", "El PIN és incorrecte!")
     return _owned_card(user, iban, pan, "El compte no pertany a l'usuari.")
 
@@ -141,6 +146,26 @@ def _is_valid(validator, value):
         return True
     except ValueError:
         return False
+
+
+def verifier_accepts(pan, expire_date, cvv):
+    """Ask the verifier service whether the CVV matches the PAN and expiry date."""
+    request = urllib.request.Request(
+        f"{settings.VERIFIER_URL}/verify",
+        data=json.dumps(
+            {"PAN": pan, "CVV": cvv, "expiration_date": expire_date.strftime("%m/%y")}
+        ).encode(),
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=5) as response:
+            return json.load(response) is True
+    except urllib.error.HTTPError as exc:
+        if exc.code == 422:  # the verifier rejected the PAN, CVV or date itself
+            return False
+        raise AppError("INFRA_ERROR", "Servei de verificació no disponible") from exc
+    except (urllib.error.URLError, TimeoutError, ValueError) as exc:
+        raise AppError("INFRA_ERROR", "Servei de verificació no disponible") from exc
 
 
 def add_card(dni, iban, pan, expire_date, alias, cvv, pin, card_type, bank):
@@ -173,13 +198,16 @@ def add_card(dni, iban, pan, expire_date, alias, cvv, pin, card_type, bank):
     # alias, or an unparseable expiry date, answers 500.
     _require("expireDate", expire_date)
     _require("alias", alias)
+    expire = parse_expire_date(expire_date)
+    cvv = v.validate_cvv(cvv)
+    if not verifier_accepts(pan, expire, cvv):
+        raise AppError("INVALID_CARD", "Les dades de la targeta no són vàlides")
     card = Card(
         id=ids.generate("CARD"),
         pan=pan,
-        expire_date=parse_expire_date(expire_date),
+        expire_date=expire,
         bank=bank,
         alias=alias,
-        cvv=v.validate_cvv(cvv),
         type=card_type.upper(),
         status="ACTIVE",
         account_id=account.id,
@@ -219,9 +247,5 @@ def verify_card(dni, iban, pan, pin):
     if not has_text(pin):
         raise AppError("INVALID_PIN_FORMAT", "El PIN és obligatori per a verificar la targeta!")
     card = get_owned_card_with_pin(dni, iban, pan, pin)
-    return {
-        "pan": card.pan,
-        "expireDate": card.expire_date_card_format,
-        "cvv": card.cvv,
-        "pin": card.pin,
-    }
+    # The card PIN and the CVV are never returned.
+    return {"pan": card.pan, "expireDate": card.expire_date_card_format}

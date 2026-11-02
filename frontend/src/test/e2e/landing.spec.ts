@@ -12,7 +12,7 @@ test.describe('Landing page', () => {
     await expect(page.getByRole('heading', { name: /Control your money/i })).toBeVisible()
 
     await page.getByRole('button', { name: 'Log In' }).click()
-    await expect(page).toHaveURL(/\/login$/)
+    await expect(page).toHaveURL(/\/accounts\/login\//)
 
     await page.goto('/')
     await page.getByRole('button', { name: /Start Now/i }).click()

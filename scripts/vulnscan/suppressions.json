@@ -1,0 +1,9 @@
+[
+  {
+    "id": "generic-api-key",
+    "tool": "gitleaks",
+    "path": "userService.js",
+    "reason": "False positive: example request body inside a JSDoc comment, not a real credential",
+    "expires": "2027-01-31"
+  }
+]

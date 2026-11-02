@@ -24,10 +24,10 @@ def test_list_has_initial_account(ana):
 def test_create_get_rename_delete(ana):
     created = ana.client.post(ana.url("/accounts"), NEW, format="json")
     assert created.status_code == 201
-    assert created.json() == {**NEW, "balance": 100.5}
+    assert created.json() == {**NEW, "balance": 0.0}
 
     url = ana.url(f"/accounts/{IBAN}")
-    assert ana.client.get(url).json()["balance"] == 100.5
+    assert ana.client.get(url).json()["balance"] == 0.0
 
     renamed = ana.client.patch(url, {"name": "Ahorro viaje"}, format="json")
     assert (renamed.status_code, renamed.json()["name"]) == (200, "Ahorro viaje")
@@ -47,12 +47,17 @@ def test_create_get_rename_delete(ana):
         ({"name": " "}, 422, "APPLICATION_ERROR"),
         ({"bank": ""}, 404, "BANK_NOT_FOUND"),
         ({"iban": "ES0000000000000000000000"}, 400, "INVALID_IBAN_FORMAT"),
-        ({"balance": -1}, 400, "DOMAIN_ERROR"),
     ],
 )
 def test_create_errors(ana, overrides, status, code):
     response = ana.client.post(ana.url("/accounts"), {**NEW, **overrides}, format="json")
     assert (response.status_code, response.json()["code"]) == (status, code)
+
+
+@pytest.mark.parametrize("balance", [1_000_000, -1, "abc", None])
+def test_opening_balance_from_client_is_ignored(ana, balance):
+    created = ana.client.post(ana.url("/accounts"), {**NEW, "balance": balance}, format="json")
+    assert (created.status_code, created.json()["balance"]) == (201, 0.0)
 
 
 def test_duplicate_iban(ana):
@@ -66,6 +71,8 @@ def test_rename_needs_a_name(ana):
     assert (response.status_code, response.json()["code"]) == (422, "APPLICATION_ERROR")
 
 
-def test_other_users_account_is_refused(ana, bob):
-    response = ana.client.get(ana.url(f"/accounts/{bob.iban()}"))
-    assert (response.status_code, response.json()["code"]) == (403, "UNAUTHORIZED")
+def test_other_users_account_looks_like_a_missing_one(ana, bob):
+    foreign = ana.client.get(ana.url(f"/accounts/{bob.iban()}"))
+    missing = ana.client.get(ana.url("/accounts/ES9121000418450200051332"))
+    assert (foreign.status_code, foreign.json()) == (missing.status_code, missing.json())
+    assert (foreign.status_code, foreign.json()["code"]) == (404, "ACCOUNT_NOT_FOUND")

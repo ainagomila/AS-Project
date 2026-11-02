@@ -61,7 +61,6 @@ test.describe('Dashboard experience', () => {
         await page.getByTestId('add-account-iban-input').fill('ES12 34')
         await page.getByTestId('add-account-name-input').fill('Emergency fund')
         await page.getByTestId('add-account-bank-input').fill('Invalid Bank')
-        await page.getByTestId('add-account-balance-input').fill('100')
         await page.getByTestId('add-account-currency-select').selectOption('EUR')
 
         const submitBtn = page.getByTestId('add-account-submit-btn')
@@ -122,7 +121,7 @@ test.describe('Dashboard experience', () => {
 
         await logInThroughUi(page, { dni: user.dni, password: user.password })
 
-        const loginUrlPattern = /\/login(\?.*)?$/
+        const loginUrlPattern = /\/accounts\/login\//
         const dashboardUrlPattern = /\/dashboard(\?.*)?$/
 
         await page.getByRole('button', { name: 'Open settings' }).click()
@@ -132,7 +131,7 @@ test.describe('Dashboard experience', () => {
         await expect(page).toHaveURL(dashboardUrlPattern)
 
         await page.locator('button.logout-btn').click()
-        await expect(page).toHaveURL(loginUrlPattern)
+        await expect(page).toHaveURL(/\/$/)
 
         await page.goto('/dashboard')
         await expect(page).toHaveURL(loginUrlPattern)

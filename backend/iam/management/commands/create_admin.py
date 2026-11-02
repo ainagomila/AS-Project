@@ -1,24 +1,12 @@
-from django.core.management.base import BaseCommand, CommandError
-
-from iam.models import Role, User
+from django.core.management import call_command
+from django.core.management.base import BaseCommand
 
 
 class Command(BaseCommand):
-    help = "Give the administrator role to an already registered user."
+    help = "Give the administrator role to an already registered user (same as: set_role <dni> admin)."
 
     def add_arguments(self, parser):
         parser.add_argument("dni")
-        parser.add_argument(
-            "--role",
-            choices=[r.value for r in Role],
-            default=Role.ADMIN,
-            help="Role to assign (default: ADMIN).",
-        )
 
-    def handle(self, *args, dni, role, **options):
-        user = User.objects.filter(dni=dni).first()
-        if user is None:
-            raise CommandError(f"No user with DNI {dni}. Register the user first.")
-        user.role = role
-        user.save(update_fields=["role"])
-        self.stdout.write(f"{dni} is now {role}")
+    def handle(self, *args, dni, **options):
+        call_command("set_role", dni, "admin", stdout=self.stdout)

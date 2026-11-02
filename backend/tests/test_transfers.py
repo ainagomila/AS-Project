@@ -1,3 +1,5 @@
+from unittest import mock
+
 import pytest
 
 from payments.models import Payment
@@ -58,6 +60,15 @@ def test_transfer_moves_money_and_shows_on_both_sides(ana, bob):
         ({"destinationIban": "ES00"}, 400, "INVALID_IBAN_FORMAT"),
         ({"destinationIban": "ES9121000418450200051332"}, 404, "ACCOUNT_NOT_FOUND"),
         ({"amount": 0}, 400, "DOMAIN_ERROR"),
+        ({"amount": -5}, 400, "DOMAIN_ERROR"),
+        ({"amount": 1.005}, 400, "INVALID_MONEY_AMOUNT"),
+        ({"amount": "NaN"}, 400, "INVALID_MONEY_AMOUNT"),
+        ({"amount": "Infinity"}, 400, "INVALID_MONEY_AMOUNT"),
+        ({"amount": "1e40"}, 400, "INVALID_MONEY_AMOUNT"),
+        ({"amount": "abc"}, 400, "INVALID_MONEY_AMOUNT"),
+        ({"amount": True}, 400, "INVALID_MONEY_AMOUNT"),
+        ({"amount": None}, 400, "INVALID_MONEY_AMOUNT"),
+        ({"amount": 100.01}, 422, "INSUFFICIENT_FUNDS"),
         ({"amount": 1000}, 422, "INSUFFICIENT_FUNDS"),
         ({"currency": ""}, 400, "DOMAIN_ERROR"),
         ({"currency": "USD"}, 400, "DOMAIN_ERROR"),
@@ -71,13 +82,33 @@ def test_transfer_errors(ana, bob, overrides, status, code):
     assert balance(ana) == 100.0
 
 
+def test_amount_with_trailing_zero_decimals_is_accepted(ana, bob):
+    assert transfer(ana, bob.iban(), amount="100.000").status_code == 200
+    assert (balance(ana), balance(bob)) == (0.0, 200.0)
+
+
+def test_self_transfer_is_rejected(ana):
+    response = transfer(ana, ana.iban(), amount=50)
+    assert (response.status_code, response.json()["code"]) == (400, "DOMAIN_ERROR")
+    assert balance(ana) == 100.0
+    assert not Payment.objects.exists()
+
+
+def test_failure_while_recording_payment_rolls_back_balances(ana, bob):
+    with mock.patch.object(Payment.objects, "create", side_effect=RuntimeError("boom")):
+        response = transfer(ana, bob.iban())
+    assert response.status_code == 500
+    assert (balance(ana), balance(bob)) == (100.0, 100.0)
+    assert not Payment.objects.exists()
+
+
 def test_cannot_transfer_from_someone_elses_account(ana, bob):
     response = ana.client.post(
         ana.url(f"/accounts/{bob.iban()}/transfers"),
         {"beneficiary": "x", "destinationIban": ana.iban(), "amount": 5, "currency": "EUR", "concept": "x", "pin": PIN},
         format="json",
     )
-    assert (response.status_code, response.json()["code"]) == (403, "UNAUTHORIZED")
+    assert (response.status_code, response.json()["code"]) == (404, "ACCOUNT_NOT_FOUND")
 
 
 def test_history_filters_and_sorting(ana, bob):

@@ -37,7 +37,7 @@
 </template>
 
 <script setup>
-import { Plus, CreditCard } from 'lucide-vue-next'
+import { Plus, CreditCard } from '@lucide/vue'
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -75,8 +75,6 @@ const displayNumber = (card) => `••••${nbsp}••••${nbsp}•••
 
 /* Navegar al detalle de la tarjeta */
 const goToCardDetail = (card) => {
-  console.log('[goTo] caardId (route param):', card.id)
-
   router.push({
     name: 'CardDetail',
     params: { id: card.id }, // id = pan

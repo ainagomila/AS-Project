@@ -52,7 +52,26 @@ cd "$PROJECT_ROOT/backend"
 mkdir -p .certs
 mkcert -install
 mkcert -cert-file .certs/localhost.pem -key-file .certs/localhost-key.pem localhost 127.0.0.1 ::1 backend
+cp "$(mkcert -CAROOT)/rootCA.pem" .certs/rootCA.pem
 
 cd "$PROJECT_ROOT"
+for name in VERIFIER_SECRET_KEY DJANGO_SECRET_KEY POSTGRES_PASSWORD; do
+  if ! grep -qs "^$name=" .env; then
+    echo "Generating $name in .env..."
+    echo "$name=$(openssl rand -hex 32)" >> .env
+    if [ "$name" = POSTGRES_PASSWORD ]; then
+      echo "A database created with the old fixed password will refuse it: run 'docker compose down -v' once." >&2
+    fi
+  fi
+done
+COMPOSE_FILES="-f docker-compose.yaml"
+if docker --version 2>/dev/null | grep -qi podman; then
+  # Rootless Podman: the override maps the host user to the images' default UID 1000.
+  COMPOSE_FILES="$COMPOSE_FILES -f docker-compose.podman.yml"
+elif [ "$(id -u)" -ne 0 ]; then
+  # Docker: build the images' user with the host UID so it can read backend/.certs.
+  export KOFRE_UID="$(id -u)"
+fi
 echo "Starting Docker Compose..."
-docker compose up --build
+# -V: fresh anonymous volumes (.venv, node_modules), owned by the images' non-root users.
+docker compose $COMPOSE_FILES up --build -V

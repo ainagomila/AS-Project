@@ -337,7 +337,7 @@ import HeaderLayout from '@/components/layout/HeaderLayout.vue'
 import FooterLayout from '@/components/layout/FooterLayout.vue'
 import { ref, nextTick, onMounted, onUnmounted, computed } from 'vue'
 import { useUserStore } from '@/stores/user'
-import { Eye, EyeOff, Lock, Shield } from 'lucide-vue-next'
+import { Eye, EyeOff, Lock, Shield } from '@lucide/vue'
 import {
   getUser,
   updateUser,
@@ -395,7 +395,7 @@ onMounted(async () => {
     form.value = { ...snap }
     original.value = { ...snap }
   } catch (e) {
-    console.error('Error cargando perfil:', e)
+    console.error('Error cargando perfil:', e?.message)
     showToast('No se pudo cargar el perfil.', 'error')
   }
 })
@@ -646,7 +646,7 @@ async function confirmPinReveal() {
     }
     closePinPrompt()
   } catch (e) {
-    console.error('Error verifying PIN (reveal):', e)
+    console.error('Error verifying PIN (reveal):', e?.message)
 
     // Preferimos el contrato del BE: { error: { message: "..."} }
     let msg =
@@ -785,7 +785,7 @@ async function confirmSave() {
     closeSavePrompt()
     showToast('Changes saved.', 'success')
   } catch (e) {
-    console.error('Error saving security changes:', e)
+    console.error('Error saving security changes:', e?.message)
 
     const msg =
       e?.response?.data?.error?.message ||
@@ -881,7 +881,7 @@ async function confirmDelete() {
 
     router.push('/')
   } catch (e) {
-    console.error('Error deleting user:', e)
+    console.error('Error deleting user:', e?.message)
     const msg =
       e?.response?.data?.error?.message ||
       e?.response?.data?.message ||

@@ -1,113 +1,94 @@
+import re
+
 from django.db import models
-from django.utils import timezone
+from django.contrib.auth.hashers import check_password, make_password
+from django.contrib.auth.models import BaseUserManager, AbstractBaseUser
 
-from common import crypto
+from common import crypto, ids
 
 
-class Role(models.TextChoices):
-    """Application roles.
+def normalize_dni(dni):
+    return re.sub(r"\s+", "", dni or "").upper()
 
-    - USER: a normal customer. Can only act on their own accounts and cards.
-    - ADMIN: full management access (users, accounts, cards, settings) plus the
-      ability to grant and revoke roles.
-    - AUDITOR: read-only access to the same entities an admin can read, but no
-      write operations. Separation of duties for compliance reviews.
-    """
 
-    USER = "USER", "User"
-    ADMIN = "ADMIN", "Administrator"
-    AUDITOR = "AUDITOR", "Auditor"
+def dni_blind_index(dni):
+    return crypto.blind_index(normalize_dni(dni), "iam_user.dni_index")
 
-class User(models.Model):
+
+def phone_blind_index(prefix, number):
+    return crypto.blind_index(f"{prefix}{number}", "iam_user.phone_index")
+
+
+class UserManager(BaseUserManager):
+    def create_user(self, dni, email, password=None, **extra_fields):
+        if not email: raise ValueError("Users must have an email address")
+        email=self.normalize_email(email)
+        user = self.model(id=ids.generate("USER"), dni=dni, email=email, **extra_fields)
+        user.set_password(password)
+        user.save(using=self._db)
+        return user
+
+    def find_by_dni(self, dni):
+        return self.filter(dni_index=dni_blind_index(dni)).first()
+
+    def get_by_natural_key(self, username):
+        # Login (ModelBackend) passes the DNI typed by the user.
+        return self.get(dni_index=dni_blind_index(username))
+
+    def phone_exists(self, prefix, number):
+        return self.filter(phone_index=phone_blind_index(prefix, number)).exists()
+
+
+CUSTOMER, ADMIN, AUDITOR = "customer", "admin", "auditor"
+ROLES = [(CUSTOMER, "Customer"), (ADMIN, "Administrator"), (AUDITOR, "Auditor")]
+
+
+class User(AbstractBaseUser):
     id = models.CharField(primary_key=True, max_length=32)
-    dni = models.CharField(max_length=16, db_index=True)
+    # DNI, email and phone number are encrypted (common/crypto.py); the blind
+    # indexes serve lookups and uniqueness.
+    dni_enc = models.TextField()
+    dni_index = models.CharField(max_length=64, unique=True)
+    email_enc = models.TextField()
     name = models.CharField(max_length=255)
-    email = models.CharField(max_length=255)
     phone_prefix = models.CharField(max_length=8)
-    phone_number = models.CharField(max_length=16)
+    phone_number_enc = models.TextField()
+    phone_index = models.CharField(max_length=64, db_index=True)
     birthdate = models.DateField()
     gender = models.CharField(max_length=8)
-
-    # Password and PIN are stored with reversible encryption, as in the original.
-    password_iv = models.CharField(max_length=32)
-    password_ciphertext = models.TextField()
-    password_tag = models.CharField(max_length=32)
-    pin_iv = models.CharField(max_length=32)
-    pin_ciphertext = models.TextField()
-    pin_tag = models.CharField(max_length=32)
-
-    role = models.CharField(
-        max_length=16, choices=Role.choices, default=Role.USER, db_index=True
-    )
     is_active = models.BooleanField(default=True)
+    # Access rights are decided by the XACML policy (authz/policies) from this role.
+    role = models.CharField(max_length=16, choices=ROLES, default=CUSTOMER)
+    objects = UserManager()
+    password = models.CharField(max_length = 128)
+    pin = models.CharField(max_length=128)
+    USERNAME_FIELD = 'dni_index'
+    REQUIRED_FIELDS = []
 
-    # Login throttling / lockout (hardening, not part of the original baseline).
-    failed_login_attempts = models.IntegerField(default=0)
-    locked_until = models.DateTimeField(null=True, blank=True)
+    dni = crypto.encrypted("dni_enc", normalize=normalize_dni, index=("dni_index", dni_blind_index))
+    email = crypto.encrypted("email_enc")
+    phone_number = crypto.encrypted("phone_number_enc")
 
-    @property
-    def is_admin(self):
-        """Backwards-compatible convenience: true only for the ADMIN role."""
-        return self.role == Role.ADMIN
+    def __str__(self):
+        return self.id
 
-    @property
-    def is_staff(self):
-        """True for every role that may enter the admin console."""
-        return self.role in (Role.ADMIN, Role.AUDITOR)
+    def set_password(self, raw):
+          self.password = make_password(raw)
 
-    @property
-    def password(self):
-        return crypto.decrypt(self.password_iv, self.password_ciphertext, self.password_tag)
 
-    @password.setter
-    def password(self, plain):
-        self.password_iv, self.password_ciphertext, self.password_tag = crypto.encrypt(plain)
+    def check_password(self, raw):
+        return check_password(raw, self.password)
 
-    @property
-    def pin(self):
-        return crypto.decrypt(self.pin_iv, self.pin_ciphertext, self.pin_tag)
+    def set_pin(self, raw):
+        self.pin = make_password(raw)
 
-    @pin.setter
-    def pin(self, plain):
-        self.pin_iv, self.pin_ciphertext, self.pin_tag = crypto.encrypt(plain)
+    def check_pin(self, raw):
+        return check_password(raw, self.pin)
+
+    def set_phone(self, prefix, number):
+        self.phone_prefix, self.phone_number = prefix, number
+        self.phone_index = phone_blind_index(prefix, number)
 
     @property
     def phone(self):
         return self.phone_prefix + self.phone_number
-
-    def purge_expired_sessions(self):
-        self.sessions.filter(expires_at__lt=timezone.now()).delete()
-
-    def check_session(self, token):
-        self.purge_expired_sessions()
-        return self.sessions.filter(token=token, expires_at__gte=timezone.now()).exists()
-
-
-class Session(models.Model):
-    token = models.CharField(max_length=64, db_index=True)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="sessions")
-    expires_at = models.DateTimeField()
-
-class AuditLog(models.Model):
-    """Append-only record of sensitive administrative actions (X5 / B13)."""
-
-    id = models.CharField(primary_key=True, max_length=32)
-    actor_id = models.CharField(max_length=32, db_index=True)
-    actor_dni = models.CharField(max_length=16)
-    action = models.CharField(max_length=64, db_index=True)
-    target_type = models.CharField(max_length=32)
-    target_id = models.CharField(max_length=64, default="", blank=True)
-    detail = models.JSONField(default=dict)
-    created_at = models.DateTimeField(default=timezone.now, db_index=True)
-
-    class Meta:
-        ordering = ["-created_at"]
-
-
-class SystemSetting(models.Model):
-    """Key/value store for advanced administrator configuration."""
-
-    key = models.CharField(primary_key=True, max_length=64)
-    value = models.JSONField()
-    description = models.CharField(max_length=255, default="", blank=True)
-    updated_at = models.DateTimeField(auto_now=True)

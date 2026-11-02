@@ -16,9 +16,11 @@ const TransferView = () => import('@/views/TransferView.vue')
 const ProfileView = () => import('@/views/ProfileView.vue')
 const TermsView = () => import('@/views/TermsView.vue')
 const AdminView = () => import('@/views/AdminView.vue')
+const CallbackView = () => import('@/views/CallbackView.vue')
 
 // Store
 import { useUserStore } from '@/stores/user'
+import { userManager } from '@/api/oidc'
 
 const routes = [
   // ======================
@@ -47,6 +49,12 @@ const routes = [
     path: '/terms',
     name: 'Terms',
     component: TermsView,
+  },
+
+  {
+    path: '/callback',
+    name: 'Callback',
+    component: CallbackView,
   },
 
   // ======================
@@ -92,7 +100,7 @@ const routes = [
     meta: { requiresAuth: true },
   },
 
-  // Administración (administradores y auditores)
+  // Administración
   {
     path: '/admin',
     name: 'Admin',
@@ -114,7 +122,7 @@ const router = createRouter({
 /**
  * Guard global de navegación:
  * - Usa userStore.isAuthenticated como bandera de sesión.
- * - Si vas a login/signup estando autenticado → logout automático (solo FE).
+ * - Si vas a login/signup estando autenticado → logout completo (revoca tokens).
  * - Si intentas entrar en rutas con requiresAuth sin estar autenticado → redirige a /login.
  *
  * Resultado:
@@ -125,13 +133,13 @@ const router = createRouter({
 router.beforeEach((to, from, next) => {
   const userStore = useUserStore()
 
-  let isLoggedIn = userStore.isAuthenticated
+  const isLoggedIn = userStore.isAuthenticated
 
-  // 1) Si voy a login/signup (onlyGuest) y estoy logueado → logout frontend
+  // 1) Si voy a login/signup (onlyGuest) y estoy logueado → logout completo
   if (to.meta.onlyGuest && isLoggedIn) {
     userStore.logout()
-    isLoggedIn = false
-    // Dejamos que navegue a /login o /signup ya como invitado
+    userManager.signoutRedirect()
+    return next(false)
   }
 
   // 2) Si la ruta requiere auth y NO estoy logueado → mandar a Login
@@ -142,7 +150,7 @@ router.beforeEach((to, from, next) => {
     })
   }
 
-  // 3) Rutas de administración: solo staff (admin o auditor)
+  // 3) Back office: only staff (admin or auditor). Cosmetic: the backend policy decides.
   if (to.meta.requiresStaff && !userStore.isStaff) {
     return next({ name: 'Dashboard' })
   }

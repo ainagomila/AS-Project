@@ -249,8 +249,6 @@ onMounted(async () => {
   accountError.value = null
 
   try {
-    userStore.initFromStorage()
-
     if (!userStore.isAuthenticated || !userStore.dni) {
       router.push('/login')
       return
@@ -267,7 +265,7 @@ onMounted(async () => {
       currency: (data.currency || 'EUR').toUpperCase(),
     }
   } catch (err) {
-    console.error('Error fetching account:', err)
+    console.error('Error fetching account:', err?.message)
     accountError.value = 'Unable to load account information.'
   } finally {
     loadingAccount.value = false
@@ -487,8 +485,6 @@ async function confirmTransfer() {
     showToast('No pots fer una transferència al mateix compte', 'error')
     return
   }
-  console.log(account.value.currency)
-
 
   const payload = {
     beneficiary: form.value.beneficiary.trim(),
@@ -498,8 +494,6 @@ async function confirmTransfer() {
     concept: form.value.concept.trim(),
     pin: typed,
   }
-
-  console.log('Payload transfer:', payload)
 
   try {
     await createTransfer(
@@ -519,7 +513,7 @@ async function confirmTransfer() {
       },
     )
   }  catch (err) {
-  console.error("ERROR EN TRANSFERENCIA:", err);
+  console.error("ERROR EN TRANSFERENCIA:", err?.message);
 
   const status = err?.response?.status;
   const code = err?.response?.data?.code;

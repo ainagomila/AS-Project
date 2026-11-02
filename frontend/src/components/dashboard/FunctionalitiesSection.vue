@@ -18,7 +18,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import { ShieldCheck, UserRound } from 'lucide-vue-next'
+import { ShieldCheck, UserRound } from '@lucide/vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 
@@ -29,8 +29,9 @@ const functionalities = computed(() => {
   const items = [
     { name: 'Profile', icon: UserRound, action: () => router.push({ name: 'Profile' }) },
   ]
-  if (userStore.isAdmin) {
-    items.push({ name: 'Admin', icon: ShieldCheck, action: () => router.push({ name: 'Admin' }) })
+  if (userStore.isStaff) {
+    const name = userStore.isAuditor ? 'Audit' : 'Admin'
+    items.push({ name, icon: ShieldCheck, action: () => router.push({ name: 'Admin' }) })
   }
   return items
 })
