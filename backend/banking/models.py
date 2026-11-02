@@ -4,6 +4,8 @@ from django.db import models
 
 from common import crypto
 
+ACCOUNT_STATUSES = ("ACTIVE", "FROZEN", "CLOSED")
+CARD_STATUSES = ("ACTIVE", "FREEZED", "DEAD")
 
 class Account(models.Model):
     id = models.CharField(primary_key=True, max_length=32)
@@ -12,6 +14,9 @@ class Account(models.Model):
     bank = models.CharField(max_length=255)
     balance = models.DecimalField(max_digits=18, decimal_places=2)
     currency = models.CharField(max_length=3)
+    status = models.CharField(max_length=8, default="ACTIVE")
+    status_reason = models.CharField(max_length=255, default="")
+    status_updated_at = models.DateTimeField(null=True, blank=True)
     # Plain reference, as in the original: deleting a user leaves the account.
     user_id = models.CharField(max_length=32, db_index=True)
 
@@ -41,6 +46,8 @@ class Card(models.Model):
     bank = models.CharField(max_length=255)
     type = models.CharField(max_length=8)
     status = models.CharField(max_length=8)
+    status_reason = models.CharField(max_length=255, default="")
+    status_updated_at = models.DateTimeField(null=True, blank=True)
     pin_enc = models.TextField()
     account_id = models.CharField(max_length=32, db_index=True)
     objects = CardManager()

@@ -39,8 +39,13 @@ class UserManager(BaseUserManager):
         return self.filter(phone_index=phone_blind_index(prefix, number)).exists()
 
 
-CUSTOMER, ADMIN, AUDITOR = "customer", "admin", "auditor"
-ROLES = [(CUSTOMER, "Customer"), (ADMIN, "Administrator"), (AUDITOR, "Auditor")]
+CUSTOMER, ADMIN, AUDITOR, OPERATIONS = "customer", "admin", "auditor", "operations"
+ROLES = [
+    (CUSTOMER, "Customer"),
+    (ADMIN, "Administrator"),
+    (AUDITOR, "Auditor"),
+    (OPERATIONS, "Operations"),
+]
 
 
 class User(AbstractBaseUser):

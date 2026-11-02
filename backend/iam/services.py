@@ -74,6 +74,40 @@ def _map_domain_error(exc):
     return AppError("DOMAIN_ERROR", message)
 
 
+def create_user_record(name, dni, email, phone, password, birthdate, gender, pin):
+    """Build and validate a user without opening a session or account."""
+    if find_by_dni(dni) is not None:
+        raise AppError("USER_ALREADY_EXISTS", "Ja existeix aquest usuari")
+    try:
+        prefix, number = _split_phone(phone)
+        prefix, number = v.validate_phone(prefix, number)
+        user = User(id=ids.generate("USER"), name=name)
+        user.set_password(v.validate_password(password))
+        user.set_pin(v.validate_user_pin(pin))
+        user.dni = v.validate_dni(dni)
+        user.set_phone(prefix, number)
+        user.email = v.validate_email(email)
+        user.birthdate = v.validate_birthdate(birthdate)
+        user.gender = v.validate_gender(gender)
+    except ValueError as exc:
+        raise _map_domain_error(exc) from None
+    if User.objects.phone_exists(prefix, number):
+        raise AppError("USER_ALREADY_EXISTS", "Ja existeix aquest usuari")
+    return user
+
+
+def create_initial_account(user):
+    return Account.objects.create(
+        id=ids.generate("ACC"),
+        name="Kofre",
+        bank="Kofre Bank",
+        balance=v.money_amount(100),
+        currency="EUR",
+        iban=v.random_spanish_iban(),
+        user_id=user.id,
+    )
+
+
 def _require_pin(dni, pin):
     """checkPin + the INVALID_PIN branch every caller repeats in the original."""
     if not has_text(pin):

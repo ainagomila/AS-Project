@@ -7,11 +7,12 @@ from oauth2_provider.models import AccessToken
 from authz.models import AuditEvent
 from iam.models import User
 
-from .conftest import DNI_A, DNI_B, PIN, Actor
+from .conftest import DNI_A, DNI_B, PIN, Actor, register_payload
 
 pytestmark = pytest.mark.django_db
 
 DNI_C = "11111111H"
+DNI_D = "22222222J"
 
 
 @pytest.fixture
@@ -24,6 +25,13 @@ def admin(ana):
 def auditor(db):
     actor = Actor(DNI_C, "+34600111111")
     call_command("set_role", DNI_C, "auditor")
+    return actor
+
+
+@pytest.fixture
+def operations(db):
+    actor = Actor(DNI_D, "+34600222222")
+    call_command("set_role", DNI_D, "operations")
     return actor
 
 
@@ -131,6 +139,42 @@ def test_unknown_target_user_looks_missing(admin):
     assert (response.status_code, response.json()["code"]) == (404, "USER_NOT_FOUND")
 
 
+def test_admin_manages_customer_lifecycle(admin, bob):
+    payload = register_payload(
+        dni="11111111H",
+        phone="+34600111111",
+        name="Created Customer",
+        email="created@example.com",
+    )
+    created = admin.client.post("/admin/users", payload, format="json")
+    assert created.status_code == 201, created.content
+    target = User.objects.get_by_natural_key("11111111H")
+    assert target.role == "customer"
+
+    promoted = admin.client.patch(
+        f"/admin/users/{target.id}", {"role": "auditor"}, format="json"
+    )
+    assert (promoted.status_code, promoted.json()["code"]) == (403, "FORBIDDEN")
+    assert target.role == "customer"
+
+    reset = admin.client.post(
+        f"/admin/users/{User.objects.get_by_natural_key(DNI_B).id}",
+        {"newPassword": "New_Admin_Reset_1"},
+        format="json",
+    )
+    assert reset.status_code == 200
+    assert User.objects.get_by_natural_key(DNI_B).check_password("New_Admin_Reset_1")
+
+    deleted = admin.client.delete(f"/admin/users/{target.id}")
+    assert deleted.status_code == 204
+    assert not User.objects.filter(id=target.id).exists()
+
+    bob_id = User.objects.get_by_natural_key(DNI_B).id
+    deleted = admin.client.delete(f"/admin/users/{bob_id}")
+    assert deleted.status_code == 204
+    assert not User.objects.filter(id=bob_id).exists()
+
+
 # ------------------------------------------------------------------ auditor
 
 def test_auditor_sees_pseudonymised_users(auditor, bob):
@@ -164,6 +208,25 @@ def test_auditor_changes_nothing(auditor, bob):
 def test_auditor_cannot_reach_an_account_through_another_user(auditor, ana, bob):
     response = auditor.client.get(f"/admin/users/{user_id(DNI_B)}/accounts/{account_id(DNI_A)}/transfers")
     assert (response.status_code, response.json()["code"]) == (404, "ACCOUNT_NOT_FOUND")
+
+
+def test_operations_can_change_account_state_without_financial_access(operations, bob, admin):
+    account = account_id(DNI_B)
+    listed = operations.client.get("/operations/accounts")
+    assert listed.status_code == 200
+    row = next(item for item in listed.json()["accounts"] if item["id"] == account)
+    assert row["iban"].endswith(bob.iban()[-4:])
+    assert "balance" not in row
+
+    frozen = operations.client.patch(
+        f"/operations/accounts/{account}",
+        {"status": "FROZEN", "reason": "Suspected fraud"},
+        format="json",
+    )
+    assert (frozen.status_code, frozen.json()["status"]) == (200, "FROZEN")
+
+    denied = admin.client.get("/operations/accounts")
+    assert (denied.status_code, denied.json()["code"]) == (403, "FORBIDDEN")
 
 
 # ------------------------------------------------------------------ audit trail

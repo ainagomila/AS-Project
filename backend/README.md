@@ -57,7 +57,7 @@ decrypt. Passwords and the user PIN are not encrypted but hashed with Argon2id.
 Register a user through the app, then:
 
 ```sh
-uv run python manage.py set_role <dni> admin   # or auditor, or customer
+uv run python manage.py set_role <dni> admin   # or auditor, operations, or customer
 ```
 
 `create_admin <dni>` is the same as `set_role <dni> admin`.

@@ -157,4 +157,4 @@ def test_every_api_route_goes_through_the_policy():
         methods = {m.upper() for m in ("get", "post", "patch", "put", "delete") if hasattr(view, m)}
         assert methods <= set(view.actions), (route, methods - set(view.actions))
         checked += 1
-    assert checked == 18  # update when adding an endpoint
+    assert checked == 22  # update when adding an endpoint

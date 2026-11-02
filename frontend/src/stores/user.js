@@ -20,7 +20,8 @@ export const useUserStore = defineStore('user', () => {
   )
   const isAdmin = computed(() => role.value === 'admin')
   const isAuditor = computed(() => role.value === 'auditor')
-  const isStaff = computed(() => isAdmin.value || isAuditor.value)
+  const isOperations = computed(() => role.value === 'operations')
+  const isStaff = computed(() => isAdmin.value || isAuditor.value || isOperations.value)
 
   /**
    * Marks the user as signed in.
@@ -53,6 +54,7 @@ export const useUserStore = defineStore('user', () => {
     role,
     isAdmin,
     isAuditor,
+    isOperations,
     isStaff,
     login,
     logout,

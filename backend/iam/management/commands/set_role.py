@@ -4,7 +4,7 @@ from iam.models import ROLES, User
 
 
 class Command(BaseCommand):
-    help = "Give a role (customer, admin or auditor) to an already registered user."
+    help = "Give a role (customer, admin, auditor or operations) to an already registered user."
 
     def add_arguments(self, parser):
         parser.add_argument("dni")

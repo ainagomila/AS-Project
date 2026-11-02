@@ -20,6 +20,7 @@ SUBJECT_SCOPE = (SUBJECT, "urn:kofre:subject:scope")
 
 RESOURCE_TYPE = (RESOURCE, "urn:kofre:resource:type")
 RESOURCE_ID = (RESOURCE, "urn:oasis:names:tc:xacml:1.0:resource:resource-id")
+RESOURCE_STATUS = (RESOURCE, "urn:kofre:resource:status")
 PATH_DNI = (RESOURCE, "urn:kofre:resource:path-dni")
 PATH_IBAN = (RESOURCE, "urn:kofre:resource:path-iban")
 OWNER_ID = (RESOURCE, "urn:kofre:resource:owner-id")
@@ -90,7 +91,7 @@ def resource_attributes(resource_type, kwargs):
         attributes.update(_account_attributes(kwargs["iban"]))
     elif resource_type == "card":
         attributes.update(_card_attributes(kwargs["pan"]))
-    elif resource_type in ("staff-users", "audit-log"):
+    elif resource_type in ("staff-users", "audit-log", "operations-accounts", "operations-cards"):
         attributes[EXISTS] = [True]
     elif resource_type == "staff-user":
         _, found = _target_user_attributes(kwargs["user_id"])
@@ -104,6 +105,18 @@ def resource_attributes(resource_type, kwargs):
             attributes[EXISTS] = [False]
         else:
             attributes[RESOURCE_ID] = [account.id]
+    elif resource_type == "operations-account":
+        account = Account.objects.filter(id=kwargs["account_id"]).first()
+        attributes[EXISTS] = [account is not None]
+        if account is not None:
+            attributes[RESOURCE_ID] = [account.id]
+            attributes[RESOURCE_STATUS] = [account.status]
+    elif resource_type == "operations-card":
+        card = Card.objects.filter(id=kwargs["card_id"]).first()
+        attributes[EXISTS] = [card is not None]
+        if card is not None:
+            attributes[RESOURCE_ID] = [card.id]
+            attributes[RESOURCE_STATUS] = [card.status]
     return attributes
 
 
