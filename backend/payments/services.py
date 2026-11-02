@@ -68,6 +68,8 @@ def add_transfer(dni, iban, beneficiary, destination_iban, amount, currency, con
     if destination_iban is not None:
         destination_iban = re.sub(r"\s+", "", destination_iban)
     source = _resolve_user_account(dni, iban, pin, with_pin=True)
+    from banking.services import require_active_account
+    require_active_account(source)
 
     if not has_text(beneficiary):
         raise AppError("APPLICATION_ERROR", "El camp 'beneficiary' és obligatori!")
@@ -92,6 +94,7 @@ def add_transfer(dni, iban, beneficiary, destination_iban, amount, currency, con
     destination = find_by_iban(destination_iban)
     if destination is None:
         raise AppError("ACCOUNT_NOT_FOUND", "El compte destí és inexistent!")
+    require_active_account(destination)
     if destination.pk == source.pk:
         raise AppError("DOMAIN_ERROR", "El compte destí ha de ser diferent del d'origen!")
 

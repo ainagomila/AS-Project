@@ -5,15 +5,19 @@
     </header>
 
     <main class="scroll-content">
-      <section class="admin-section">
+      <section v-if="userStore.isAdmin || userStore.isAuditor" class="admin-section">
         <h2 class="admin-title">Users</h2>
         <p class="admin-note" data-testid="admin-role-note">
           <template v-if="userStore.isAuditor">
             Auditor view: personal data is pseudonymised and nothing can be changed.
           </template>
-          <template v-else>
+          <template v-else-if="userStore.isAdmin">
             Administrator view: you can enable or disable customers. Balances and transfers are only
             visible to auditors.
+          </template>
+          <template v-else>
+            Operations view: you can block or reactivate accounts and cards. Balances and transfers
+            are not available here.
           </template>
         </p>
         <p v-if="error" class="admin-error" data-testid="admin-error">{{ error }}</p>
@@ -69,6 +73,52 @@
                 >
                   Reset password
                 </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section v-if="userStore.isOperations" class="admin-section">
+        <h2 class="admin-title">Operational product controls</h2>
+        <p v-if="error" class="admin-error">{{ error }}</p>
+        <h3>Accounts</h3>
+        <table class="admin-table">
+          <thead><tr><th>IBAN</th><th>Status</th><th>Reason</th><th>Change</th></tr></thead>
+          <tbody>
+            <tr v-for="account in operationAccounts" :key="account.id">
+              <td>{{ account.iban }}</td>
+              <td>{{ account.status }}</td>
+              <td>{{ account.reason || '—' }}</td>
+              <td>
+                <select v-model="account.nextStatus">
+                  <option value="ACTIVE">Active</option>
+                  <option value="FROZEN">Frozen</option>
+                  <option value="CLOSED">Closed</option>
+                </select>
+                <input v-model="account.nextReason" maxlength="255" placeholder="Reason" />
+                <button class="admin-btn" @click="changeAccountStatus(account)">Save</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <h3>Cards</h3>
+        <table class="admin-table">
+          <thead><tr><th>Card</th><th>IBAN</th><th>Status</th><th>Reason</th><th>Change</th></tr></thead>
+          <tbody>
+            <tr v-for="card in operationCards" :key="card.id">
+              <td>•••• {{ card.last4 }}</td>
+              <td>{{ card.iban }}</td>
+              <td>{{ card.status }}</td>
+              <td>{{ card.reason || '—' }}</td>
+              <td>
+                <select v-model="card.nextStatus">
+                  <option value="ACTIVE">Active</option>
+                  <option value="FREEZED">Frozen</option>
+                  <option value="DEAD">Cancelled</option>
+                </select>
+                <input v-model="card.nextReason" maxlength="255" placeholder="Reason" />
+                <button class="admin-btn" @click="changeCardStatus(card)">Save</button>
               </td>
             </tr>
           </tbody>
@@ -184,6 +234,10 @@ import {
   getUserAccounts,
   getAccountTransfers,
   getAuditLog,
+  getOperationsAccounts,
+  setOperationsAccountStatus,
+  getOperationsCards,
+  setOperationsCardStatus,
 } from '@/api/adminService.js'
 
 const userStore = useUserStore()
@@ -192,6 +246,8 @@ const users = ref([])
 const accounts = ref([])
 const transfers = ref([])
 const events = ref([])
+const operationAccounts = ref([])
+const operationCards = ref([])
 const selectedUser = ref(null)
 const selectedAccount = ref(null)
 const error = ref('')
@@ -206,7 +262,7 @@ const newUser = ref({
   pin: '',
 })
 
-const ROLE_LABELS = { customer: 'Customer', admin: 'Admin', auditor: 'Auditor' }
+const ROLE_LABELS = { customer: 'Customer', admin: 'Admin', auditor: 'Auditor', operations: 'Operations' }
 
 function roleLabel(role) {
   return ROLE_LABELS[role] ?? role
@@ -307,6 +363,40 @@ async function createCustomer() {
       gender: '',
       pin: '',
     }
+
+  } catch (e) {
+    error.value = describe(e)
+  }
+}
+
+async function loadOperations() {
+  try {
+    operationAccounts.value = (await getOperationsAccounts()).map((item) => ({
+      ...item,
+      nextStatus: item.status,
+      nextReason: item.reason || '',
+    }))
+    operationCards.value = (await getOperationsCards()).map((item) => ({
+      ...item,
+      nextStatus: item.status,
+      nextReason: item.reason || '',
+    }))
+  } catch (e) {
+    error.value = describe(e)
+  }
+}
+
+async function changeAccountStatus(account) {
+  try {
+    Object.assign(account, await setOperationsAccountStatus(account.id, account.nextStatus, account.nextReason))
+  } catch (e) {
+    error.value = describe(e)
+  }
+}
+
+async function changeCardStatus(card) {
+  try {
+    Object.assign(card, await setOperationsCardStatus(card.id, card.nextStatus, card.nextReason))
   } catch (e) {
     error.value = describe(e)
   }
@@ -321,8 +411,9 @@ function formatDate(value) {
 }
 
 onMounted(async () => {
-  await loadUsers()
+  if (userStore.isAdmin || userStore.isAuditor) await loadUsers()
   if (userStore.isAuditor) await loadAudit()
+  if (userStore.isOperations) await loadOperations()
 })
 </script>
 

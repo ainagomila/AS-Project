@@ -46,3 +46,29 @@ export async function getAuditLog() {
   const { data } = await apiClient.get('/admin/audit')
   return data?.events ?? []
 }
+
+export async function getOperationsAccounts() {
+  const { data } = await apiClient.get('/operations/accounts')
+  return data?.accounts ?? []
+}
+
+export async function setOperationsAccountStatus(accountId, status, reason) {
+  const { data } = await apiClient.patch(`/operations/accounts/${encodeURIComponent(accountId)}`, {
+    status,
+    reason,
+  })
+  return data
+}
+
+export async function getOperationsCards() {
+  const { data } = await apiClient.get('/operations/cards')
+  return data?.cards ?? []
+}
+
+export async function setOperationsCardStatus(cardId, status, reason) {
+  const { data } = await apiClient.patch(`/operations/cards/${encodeURIComponent(cardId)}`, {
+    status,
+    reason,
+  })
+  return data
+}

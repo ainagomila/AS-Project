@@ -12,6 +12,7 @@ from .conftest import DNI_A, DNI_B, PIN, Actor, register_payload
 pytestmark = pytest.mark.django_db
 
 DNI_C = "11111111H"
+DNI_D = "22222222J"
 
 
 @pytest.fixture
@@ -24,6 +25,13 @@ def admin(ana):
 def auditor(db):
     actor = Actor(DNI_C, "+34600111111")
     call_command("set_role", DNI_C, "auditor")
+    return actor
+
+
+@pytest.fixture
+def operations(db):
+    actor = Actor(DNI_D, "+34600222222")
+    call_command("set_role", DNI_D, "operations")
     return actor
 
 
@@ -200,6 +208,25 @@ def test_auditor_changes_nothing(auditor, bob):
 def test_auditor_cannot_reach_an_account_through_another_user(auditor, ana, bob):
     response = auditor.client.get(f"/admin/users/{user_id(DNI_B)}/accounts/{account_id(DNI_A)}/transfers")
     assert (response.status_code, response.json()["code"]) == (404, "ACCOUNT_NOT_FOUND")
+
+
+def test_operations_can_change_account_state_without_financial_access(operations, bob, admin):
+    account = account_id(DNI_B)
+    listed = operations.client.get("/operations/accounts")
+    assert listed.status_code == 200
+    row = next(item for item in listed.json()["accounts"] if item["id"] == account)
+    assert row["iban"].endswith(bob.iban()[-4:])
+    assert "balance" not in row
+
+    frozen = operations.client.patch(
+        f"/operations/accounts/{account}",
+        {"status": "FROZEN", "reason": "Suspected fraud"},
+        format="json",
+    )
+    assert (frozen.status_code, frozen.json()["status"]) == (200, "FROZEN")
+
+    denied = admin.client.get("/operations/accounts")
+    assert (denied.status_code, denied.json()["code"]) == (403, "FORBIDDEN")
 
 
 # ------------------------------------------------------------------ audit trail

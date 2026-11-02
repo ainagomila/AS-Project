@@ -16,7 +16,7 @@ from common.validators import has_text
 from iam.services import find_by_dni
 
 from .models import Account, Card
-from .services import find_by_iban
+from .services import find_by_iban, require_active_account
 
 CARD_TYPES = ("DEBIT", "CREDIT")
 CARD_STATUSES = ("ACTIVE", "FREEZED", "DEAD")
@@ -193,6 +193,7 @@ def add_card(dni, iban, pan, expire_date, alias, cvv, pin, card_type, bank):
         raise AppError("ACCOUNT_NOT_FOUND", "Compte inexistent ni IBAN")
     if account.user_id != user.id:
         raise AppError("UNAUTHORIZED", "El compte no pertany a l'usuari")
+    require_active_account(account)
 
     # The factory checks are not caught in the original: a blank expiry date or
     # alias, or an unparseable expiry date, answers 500.
@@ -247,5 +248,7 @@ def verify_card(dni, iban, pan, pin):
     if not has_text(pin):
         raise AppError("INVALID_PIN_FORMAT", "El PIN és obligatori per a verificar la targeta!")
     card = get_owned_card_with_pin(dni, iban, pan, pin)
+    if card.status != "ACTIVE":
+        raise AppError("CARD_BLOCKED", "La targeta no està activa")
     # The card PIN and the CVV are never returned.
     return {"pan": card.pan, "expireDate": card.expire_date_card_format}

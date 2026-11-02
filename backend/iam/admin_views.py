@@ -12,6 +12,7 @@ from django.db import transaction
 from rest_framework.response import Response
 
 from banking.models import Account
+from banking import operations_services
 from common.errors import AppError
 from payments.services import payments_for_account
 
@@ -120,3 +121,39 @@ class AdminAccountTransfersView(StaffView):
         if account.user_id != user_id:
             raise AppError("ACCOUNT_NOT_FOUND", "Compte inexistent")
         return Response(payments_for_account(account.iban))
+
+
+class OperationsAccountsView(PolicyEnforcedView):
+    authentication_classes = [KofreTokenAuthentication]
+    resource_type = "operations-accounts"
+    actions = {"GET": "list-operations-accounts"}
+
+    def get(self, request):
+        return Response(operations_services.list_accounts())
+
+
+class OperationsAccountDetailView(PolicyEnforcedView):
+    authentication_classes = [KofreTokenAuthentication]
+    resource_type = "operations-account"
+    actions = {"PATCH": "set-account-status"}
+
+    def patch(self, request, account_id):
+        return Response(operations_services.update_account(account_id, request.data))
+
+
+class OperationsCardsView(PolicyEnforcedView):
+    authentication_classes = [KofreTokenAuthentication]
+    resource_type = "operations-cards"
+    actions = {"GET": "list-operations-cards"}
+
+    def get(self, request):
+        return Response(operations_services.list_cards())
+
+
+class OperationsCardDetailView(PolicyEnforcedView):
+    authentication_classes = [KofreTokenAuthentication]
+    resource_type = "operations-card"
+    actions = {"PATCH": "set-card-status"}
+
+    def patch(self, request, card_id):
+        return Response(operations_services.update_card(card_id, request.data))

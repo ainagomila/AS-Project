@@ -136,12 +136,14 @@ evaluated for every API request (details in section 7 of the
 |---|---|
 | `customer` (default) | Only their own profile, accounts, cards and transfers. |
 | `admin` | Create customers, list customer identities, reset customer passwords, delete customers, and enable or disable customers. The web API cannot provision staff roles. Never sees balances or transfers, and cannot modify staff or themselves. |
+| `operations` | List accounts and cards using masked identifiers, and activate, freeze or close them with a mandatory reason. Cannot see balances, transfers or full card data. |
 | `auditor` | Read any user's accounts and transfers with personal data masked, and read the audit trail. Changes nothing. |
 
 To give a role, register the user in the app and run, in `backend/`:
 
 ```sh
 uv run python manage.py set_role <dni> admin     # or auditor, or customer
+uv run python manage.py set_role <dni> operations # account/card operations
 ```
 
 (`create_admin <dni>` still works.) With Docker:

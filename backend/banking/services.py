@@ -46,6 +46,11 @@ def get_owned_account_with_pin(dni, iban, pin):
     return _owned(user, iban, "Compte inexistent!")
 
 
+def require_active_account(account):
+    if account.status != "ACTIVE":
+        raise AppError("ACCOUNT_BLOCKED", "El compte no està actiu")
+
+
 def _owned(user, iban, account_missing):
     account = find_by_iban(iban)
     if account is None:

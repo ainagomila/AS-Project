@@ -19,4 +19,8 @@ urlpatterns = [
         admin_views.AdminAccountTransfersView.as_view(),
     ),
     path("admin/audit", AuditLogView.as_view()),
+    path("operations/accounts", admin_views.OperationsAccountsView.as_view()),
+    path("operations/accounts/<str:account_id>", admin_views.OperationsAccountDetailView.as_view()),
+    path("operations/cards", admin_views.OperationsCardsView.as_view()),
+    path("operations/cards/<str:card_id>", admin_views.OperationsCardDetailView.as_view()),
 ]
