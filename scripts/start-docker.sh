@@ -46,19 +46,33 @@ command -v docker >/dev/null 2>&1 || {
   echo "Docker Desktop is required. Start Docker Desktop and try again." >&2
   exit 1
 }
-
 echo "Creating and trusting the local HTTPS certificate..."
 cd "$PROJECT_ROOT/backend"
 mkdir -p .certs
 mkcert -install
-mkcert -cert-file .certs/localhost.pem -key-file .certs/localhost-key.pem localhost 127.0.0.1 ::1 backend
+# Keep the local CA unchanged while giving the server certificate a formal
+# development identity. The SANs preserve localhost and container connectivity
+# used by the browser, Vite and the backend proxy.
+if command -v openssl >/dev/null 2>&1; then
+  openssl req -new -newkey rsa:2048 -nodes \
+    -keyout .certs/kofre-bank.key -out .certs/kofre-bank.csr \
+    -subj "/C=ES/O=Kofre Bank/OU=Local Development/CN=Kofre Bank Development" \
+    -addext "subjectAltName=DNS:kofre-bank.test,DNS:localhost,DNS:backend,IP:127.0.0.1,IP:::1"
+  mkcert -csr .certs/kofre-bank.csr -cert-file .certs/localhost.pem
+  mv -f .certs/kofre-bank.key .certs/localhost-key.pem
+  rm -f .certs/kofre-bank.csr
+else
+  echo "OpenSSL is not installed; using a standard mkcert certificate without the formal Kofre Bank subject." >&2
+  mkcert -cert-file .certs/localhost.pem -key-file .certs/localhost-key.pem \
+    kofre-bank.test localhost 127.0.0.1 ::1 backend
+fi
 cp "$(mkcert -CAROOT)/rootCA.pem" .certs/rootCA.pem
 
 cd "$PROJECT_ROOT"
 for name in VERIFIER_SECRET_KEY DJANGO_SECRET_KEY POSTGRES_PASSWORD; do
   if ! grep -qs "^$name=" .env; then
     echo "Generating $name in .env..."
-    echo "$name=$(openssl rand -hex 32)" >> .env
+    echo "$name=$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')" >> .env
     if [ "$name" = POSTGRES_PASSWORD ]; then
       echo "A database created with the old fixed password will refuse it: run 'docker compose down -v' once." >&2
     fi

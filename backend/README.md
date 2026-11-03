@@ -20,7 +20,18 @@ uv run python manage.py generate_key   # writes .env.d/encryptionKey64.json
 sudo apt install libnss3-tools
 mkcert -install
 mkdir -p .certs
-mkcert -cert-file .certs/localhost.pem -key-file .certs/localhost-key.pem localhost 127.0.0.1 ::1 backend
+if command -v openssl >/dev/null 2>&1; then
+  openssl req -new -newkey rsa:2048 -nodes \
+    -keyout .certs/kofre-bank.key -out .certs/kofre-bank.csr \
+    -subj "/C=ES/O=Kofre Bank/OU=Local Development/CN=Kofre Bank Development" \
+    -addext "subjectAltName=DNS:kofre-bank.test,DNS:localhost,DNS:backend,IP:127.0.0.1,IP:::1"
+  mkcert -csr .certs/kofre-bank.csr -cert-file .certs/localhost.pem
+  mv -f .certs/kofre-bank.key .certs/localhost-key.pem
+  rm -f .certs/kofre-bank.csr
+else
+  mkcert -cert-file .certs/localhost.pem -key-file .certs/localhost-key.pem \
+    kofre-bank.test localhost 127.0.0.1 ::1 backend
+fi
 cp "$(mkcert -CAROOT)/rootCA.pem" .certs/rootCA.pem
 uv run python manage.py migrate
 uv run python manage.py create_oauth_client

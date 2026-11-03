@@ -50,12 +50,31 @@ if ((Test-FirefoxInstalled) -and -not (Test-NssCertutil)) {
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
     throw "Docker Desktop is required. Start Docker Desktop and try again."
 }
-
 Write-Host "Creating and trusting the local HTTPS certificate..."
 Set-Location (Join-Path $projectRoot "backend")
 New-Item -ItemType Directory -Force .certs | Out-Null
 mkcert -install
-mkcert -cert-file .certs/localhost.pem -key-file .certs/localhost-key.pem localhost 127.0.0.1 ::1 backend
+
+if (Get-Command openssl -ErrorAction SilentlyContinue) {
+    $csrPath = ".certs\kofre-bank.csr"
+    $keyPath = ".certs\kofre-bank.key"
+    openssl req -new -newkey rsa:2048 -nodes `
+        -keyout $keyPath -out $csrPath `
+        -subj "/C=ES/O=Kofre Bank/OU=Local Development/CN=Kofre Bank Development" `
+        -addext "subjectAltName=DNS:kofre-bank.test,DNS:localhost,DNS:backend,IP:127.0.0.1,IP:::1"
+    if ($LASTEXITCODE -ne 0) {
+        throw "OpenSSL could not create the Kofre Bank certificate request."
+    }
+    mkcert -csr $csrPath -cert-file .certs/localhost.pem
+    if ($LASTEXITCODE -ne 0) {
+        throw "mkcert could not sign the Kofre Bank certificate."
+    }
+    Move-Item -Force $keyPath .certs\localhost-key.pem
+    Remove-Item -Force $csrPath
+} else {
+    Write-Warning "OpenSSL is not installed. Generating a standard mkcert certificate without the formal Kofre Bank subject."
+    mkcert -cert-file .certs/localhost.pem -key-file .certs/localhost-key.pem kofre-bank.test localhost 127.0.0.1 ::1 backend
+}
 Copy-Item (Join-Path (mkcert -CAROOT) "rootCA.pem") .certs\rootCA.pem
 
 Set-Location $projectRoot
