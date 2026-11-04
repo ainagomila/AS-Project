@@ -214,9 +214,12 @@ Cryptographic inventory:
 | ID | Requirement | Where met | Status | Inventory |
 |---|---|---|---|---|
 | 16.2.1 | Log entries say who, what, when, where (L2) | `AuditEvent`: time, subject id and role, action, resource, decision, rule, status, IP | Met | X5 |
-| 16.3.1 | Authentication attempts logged (L2) | Logins and failed logins are not recorded | Not met | B13 |
+| 16.2.2 | Log timestamps synchronised, with time zone (L2) | Security log lines carry a UTC ISO 8601 `ts` | Met | B13 |
+| 16.2.5 | Sensitive data not logged (L2) | Security events name users by internal id only, never DNI, password, PIN or PAN; the development server's request lines still show the DNI in `/users/{dni}/...` paths | Partly | B13 |
+| 16.3.1 | Authentication attempts logged (L2) | `login.success` and `login.failure` from the login page (`common/seclog.py`) | Met | B13 |
 | 16.3.2 | Failed authorization logged (L2) | Every denial is audited | Met | X5 |
-| 16.3.3 | Security events and bypass attempts logged (L2) | Lockouts and wrong PINs are not logged on their own | Partly | B13 |
+| 16.3.3 | Security events and bypass attempts logged (L2) | `pin.failure` on every endpoint and `lockout` when a (DNI, IP) reaches the limit | Met | B13 |
+| 16.4.1 | Log entries encoded against injection (L2) | Each line is one `json.dumps` object, so newlines in input cannot forge entries | Met | B13 |
 | 16.4.2 | Logs protected from modification (L2) | Append-only through the ORM; a database user can still change rows | Partly | X5 |
 | 16.5.1 | Generic message on unexpected errors (L2) | Unhandled errors return the exception text | Not met | B8 |
 | 16.5.2 | Secure when an external resource fails (L2) | Verifier down: the card is refused with `INFRA_ERROR` | Met | E1 |

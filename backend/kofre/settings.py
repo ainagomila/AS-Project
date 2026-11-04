@@ -192,3 +192,14 @@ X_FRAME_OPTIONS = "DENY"
 # Lockout after wrong PINs or login passwords, per (DNI, client IP). See common/lockout.py.
 LOCKOUT_MAX_FAILURES = 5
 LOCKOUT_WINDOW_SECONDS = 15 * 60
+
+# Security events (common/seclog.py) and access decisions (authz/pep.py) as JSON lines on stdout.
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {"json": {"()": "common.seclog.JsonFormatter"}},
+    "handlers": {"json": {"class": "logging.StreamHandler", "stream": "ext://sys.stdout", "formatter": "json"}},
+    "loggers": {
+        "kofre": {"handlers": ["json"], "level": "INFO"},
+    },
+}

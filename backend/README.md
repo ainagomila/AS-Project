@@ -78,6 +78,16 @@ and an auditor, and gives each customer a debit card (see "Test data" in the roo
 README). It prints a random password, PIN and card PIN once, or takes
 `--password`, `--pin` and `--card-pin`.
 
+## Security log
+
+Logins, failed logins, wrong PINs and lockouts (`kofre.security`) and every
+access decision (`kofre.authz`) are written as JSON lines on stdout, in UTC,
+naming users by internal id only (`common/seclog.py`). To watch them:
+
+```sh
+docker compose logs -f backend | grep kofre.security
+```
+
 ## Tests
 
 The tests need PostgreSQL and `.env.d/oidc.key`; they set their own encryption
