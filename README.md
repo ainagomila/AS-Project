@@ -278,4 +278,5 @@ which fails on CRITICAL or HIGH findings.
 - [`docs/specs/2026-10-09-django-baseline-plan.md`](docs/specs/2026-10-09-django-baseline-plan.md): how the port was carried out
 - [`docs/vulnerability-inventory.md`](docs/vulnerability-inventory.md): weaknesses of the baseline and their current status
 - [`docs/asvs-mapping.md`](docs/asvs-mapping.md): OWASP ASVS 5.0 mapping
+- [`scripts/zap/README.md`](scripts/zap/README.md): authenticated OWASP ZAP scan of the local stack
 - [`backend/README.md`](backend/README.md): backend details

@@ -1,3 +1,4 @@
+param([switch]$Zap)
 $ErrorActionPreference = "Stop"
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
@@ -95,4 +96,11 @@ if ((docker --version) -match "podman") {
 }
 Write-Host "Starting Docker Compose..."
 # -V: fresh anonymous volumes (.venv, node_modules), owned by the images' non-root users.
+if ($Zap) {
+    # Detached; then the ZAP daemon and the authenticated scan run once the backend answers.
+    docker compose @composeFiles up --build -V -d
+    if ($LASTEXITCODE -ne 0) { throw "docker compose up failed." }
+    python scripts/zap/run_zap.py
+    exit $LASTEXITCODE
+}
 docker compose @composeFiles up --build -V

@@ -89,4 +89,10 @@ fi
 echo "Starting Docker Compose..."
 # -V: fresh anonymous volumes (.venv, node_modules), owned by the images' non-root users.
 # Extra arguments go to "docker compose up", e.g. -d to run in the background (CI does).
+if [ "${1:-}" = "--zap" ]; then
+  # Detached; then the ZAP daemon and the authenticated scan run once the backend answers.
+  shift
+  docker compose $COMPOSE_FILES up --build -V -d "$@"
+  exec python3 scripts/zap/run_zap.py
+fi
 docker compose $COMPOSE_FILES up --build -V "$@"
