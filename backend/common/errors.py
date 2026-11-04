@@ -86,7 +86,10 @@ class BareUnauthorized(Exception):
 
 def exception_handler(exc, context):
     if isinstance(exc, AppError) and exc.code == "INVALID_PIN":
-        lockout.record_failure(lockout.pin_key(context["request"], context["kwargs"]))
+        request = context["request"]
+        user_id = getattr(request.user, "id", None)  # None on reset-password, which has no token
+        lockout.record_failure(lockout.pin_key(request, context["kwargs"]), request, "pin.failure",
+                               **({"user_id": user_id} if user_id else {}))
     if isinstance(exc, drf_exceptions.Throttled):
         message = "Massa intents. Torna-ho a provar més tard."
         return Response({"code": "TOO_MANY_ATTEMPTS", "message": message, "metadata": {}}, status=429)

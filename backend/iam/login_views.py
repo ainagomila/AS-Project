@@ -2,6 +2,7 @@ from django.conf import settings
 from django.contrib.auth import views as auth_views
 
 from common import lockout
+from common.seclog import security_event
 
 
 class LoginView(auth_views.LoginView):
@@ -16,5 +17,7 @@ class LoginView(auth_views.LoginView):
             return self.render_to_response(context, status=429)
         response = super().post(request, *args, **kwargs)
         if response.status_code != 302:  # the form was re-rendered: wrong DNI or password
-            lockout.record_failure(lock_key)
+            lockout.record_failure(lock_key, request, "login.failure")
+        else:
+            security_event("login.success", request, user_id=request.user.id)
         return response
