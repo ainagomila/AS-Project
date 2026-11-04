@@ -233,13 +233,13 @@ describe('userService', () => {
   })
 
   it('verifies card sensitive data with endpoint guard', async () => {
-    mocks.post.mockResolvedValue({ data: { pan: '111' } })
+    mocks.post.mockResolvedValue({ data: { pan: '**** **** **** 0111', last4: '0111' } })
     const response = await verifyCard('dni', 'ES00', 'CARD 1', '654321')
     expect(apiClient.post).toHaveBeenCalledWith(
       '/users/dni/accounts/ES00/cards/CARD%201/security/verify-card',
       { pin: '654321' },
     )
-    expect(response).toEqual({ pan: '111' })
+    expect(response).toEqual({ pan: '**** **** **** 0111', last4: '0111' })
   })
 
   it('fetches transfers cleaning IBAN and normalising query params', async () => {

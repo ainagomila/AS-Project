@@ -77,7 +77,7 @@ const displayNumber = (card) => `••••${nbsp}••••${nbsp}•••
 const goToCardDetail = (card) => {
   router.push({
     name: 'CardDetail',
-    params: { id: card.id }, // id = pan
+    params: { id: card.id },
   })
 }
 </script>

@@ -125,7 +125,7 @@
     const iban = normalizeAccountIban(c.iban)
   
     return {
-      id: pan || c.id || last4,
+      id: c.id || last4,
       pan,
       type: c.type ?? c.brand ?? 'CARD',
       last4: last4 || '••••',

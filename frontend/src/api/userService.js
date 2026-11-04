@@ -165,7 +165,8 @@ export async function deleteAccount(dni, iban, pin) {
 
 /* ====================================
    CARDS
-   Identificador de tarjeta: PAN (card number sin espacios)
+   Identificador de tarjeta: opaque card id. PAN is only sent when creating
+   a card or after the user verifies the card PIN.
 ==================================== */
 
 /**
@@ -216,28 +217,31 @@ export async function getAccountCards(dni, iban) {
 }
 
 /**
- * GET CARD POR IBAN + PAN (lo dejo por si lo usáis en otro sitio)
- * GET /users/{dni}/accounts/{iban}/cards/{pan}
+ * GET CARD POR IBAN + ID
+ * GET /users/{dni}/accounts/{iban}/cards/{id}
  */
-export async function getCard(dni, iban, pan) {
-  const normalizedPan = String(pan).replace(/\s+/g, '')
+export async function getCard(dni, iban, cardId) {
+  const normalizedId = String(cardId).replace(/\s+/g, '')
   const res = await apiClient.get(
     `/users/${encodeURIComponent(dni)}/accounts/${encodeURIComponent(
       iban,
-    )}/cards/${encodeURIComponent(normalizedPan)}`,
+    )}/cards/${encodeURIComponent(normalizedId)}`,
   )
   return res.data
 }
 
 /**
- * GET CARD BY PAN (helper para CardDetail)
- * Busca dentro de /users/{dni}/cards el que tenga ese PAN
+ * GET CARD BY ID (the legacy function name is retained for compatibility)
  */
-export async function getCardByPan(dni, pan) {
-  const normalizedPan = String(pan).replace(/\s+/g, '')
+export async function getCardByPan(dni, cardId) {
+  const normalizedId = String(cardId).replace(/\s+/g, '')
   const cards = await getCards(dni)
 
-  const found = cards.find((c) => String(c.pan).replace(/\s+/g, '') === normalizedPan)
+  const found = cards.find((c) => {
+    const id = String(c.id || '').replace(/\s+/g, '')
+    const pan = String(c.pan || '').replace(/\s+/g, '')
+    return id === normalizedId || pan === normalizedId
+  })
 
   return found || null
 }
@@ -247,8 +251,8 @@ export async function getCardByPan(dni, pan) {
  * POST /users/{dni}/security/verify-card
  */
 
-export async function verifyCard(dni, accountId, pan, pin) {
-  const url = `/users/${encodeURIComponent(dni)}/accounts/${encodeURIComponent(accountId)}/cards/${encodeURIComponent(pan)}/security/verify-card`
+export async function verifyCard(dni, accountId, cardId, pin) {
+  const url = `/users/${encodeURIComponent(dni)}/accounts/${encodeURIComponent(accountId)}/cards/${encodeURIComponent(cardId)}/security/verify-card`
 
 
   const res = await apiClient.post(url, { pin })
@@ -260,11 +264,11 @@ export async function verifyCard(dni, accountId, pan, pin) {
  * DELETE /users/{dni}/cards/{pan}
  * Body: { pin: "123456" }
  */
-export async function deleteCard(dni, iban, pan, pin) {
+export async function deleteCard(dni, iban, cardId, pin) {
   const cleanIban = String(iban).replace(/\s+/g, '')
-  const cleanPan = String(pan).replace(/\s+/g, '')
+  const normalizedId = String(cardId).replace(/\s+/g, '')
 
-  const url = `/users/${encodeURIComponent(dni)}/accounts/${encodeURIComponent(cleanIban)}/cards/${encodeURIComponent(cleanPan)}`
+  const url = `/users/${encodeURIComponent(dni)}/accounts/${encodeURIComponent(cleanIban)}/cards/${encodeURIComponent(normalizedId)}`
 
   return apiClient.delete(url, {
     data: { pin },
@@ -275,9 +279,10 @@ export async function deleteCard(dni, iban, pan, pin) {
  * UPDATE CARD (alias, status…)
  * PATCH /users/{dni}/cards/{pan}
  */
-export async function updateCard(dni, iban, pan, payload) {
+export async function updateCard(dni, iban, cardId, payload) {
+  const normalizedId = String(cardId).replace(/\s+/g, '')
   const { data } = await apiClient.patch(
-    `/users/${encodeURIComponent(dni)}/accounts/${encodeURIComponent(iban)}/cards/${encodeURIComponent(pan)}`,
+    `/users/${encodeURIComponent(dni)}/accounts/${encodeURIComponent(iban)}/cards/${encodeURIComponent(normalizedId)}`,
     payload,
   )
 

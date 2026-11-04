@@ -16,8 +16,8 @@ class ContentSecurityPolicyMiddleware:
         self.policy = (
             "default-src 'none'; "
             "script-src 'nonce-{nonce}'; "
-            "style-src 'nonce-{nonce}' https://fonts.googleapis.com; "
-            "font-src https://fonts.gstatic.com; "
+            "style-src 'nonce-{nonce}'; "
+            "font-src 'self'; "
             "img-src 'self'; "
             # The login POST is redirected via /o/authorize/ to the Vue app's /callback.
             f"form-action 'self' {frontend}; "
@@ -31,4 +31,8 @@ class ContentSecurityPolicyMiddleware:
         response.headers.setdefault(
             "Content-Security-Policy", self.policy.replace("{nonce}", request.csp_nonce)
         )
+        response.headers.setdefault(
+            "Cache-Control", "no-store, no-cache, must-revalidate, max-age=0"
+        )
+        response.headers.pop("Server", None)
         return response

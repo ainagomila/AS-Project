@@ -23,8 +23,11 @@ CARD_STATUSES = ("ACTIVE", "FREEZED", "DEAD")
 
 
 def card_response(card, iban):
+    pan = card.pan
     return {
-        "pan": card.pan,
+        "id": card.id,
+        "pan": f"**** **** **** {pan[-4:]}",
+        "last4": pan[-4:],
         "iban": iban,
         "alias": card.alias,
         "bank": card.bank,
@@ -35,7 +38,8 @@ def card_response(card, iban):
 
 
 def find_by_pan(pan):
-    return Card.objects.find_by_pan(pan)
+    card = Card.objects.filter(id=pan).first()
+    return card or Card.objects.find_by_pan(pan)
 
 
 def parse_expire_date(raw):
@@ -245,10 +249,16 @@ def update_status(dni, iban, pan, status):
 def verify_card(dni, iban, pan, pin):
     if not has_text(pan):
         raise AppError("INVALID_PAN_FORMAT", "PAN oblogatori per a accedir a la targeta!")
+    if re.fullmatch(r"\d{12,19}", pan):
+        raise AppError("CARD_NOT_FOUND", "Identificador de targeta invàlid.")
     if not has_text(pin):
         raise AppError("INVALID_PIN_FORMAT", "El PIN és obligatori per a verificar la targeta!")
     card = get_owned_card_with_pin(dni, iban, pan, pin)
     if card.status != "ACTIVE":
         raise AppError("CARD_BLOCKED", "La targeta no està activa")
     # The card PIN and the CVV are never returned.
-    return {"pan": card.pan, "expireDate": card.expire_date_card_format}
+    return {
+        "pan": f"**** **** **** {card.pan[-4:]}",
+        "last4": card.pan[-4:],
+        "expireDate": card.expire_date_card_format,
+    }

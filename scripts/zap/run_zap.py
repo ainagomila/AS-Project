@@ -54,8 +54,17 @@ def zap_up():
     try:
         zap_api("core/view/version")
         return True
-    except urllib.error.HTTPError:
-        sys.exit(f"ZAP already answers on {ZAP_URL} but not with this API key: set ZAP_API_KEY or stop it.")
+    except urllib.error.HTTPError as error:
+        try:
+            payload = json.loads(error.read())
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return False
+        if payload.get("code") in {"bad_key", "missing_apikey"}:
+            sys.exit(
+                f"ZAP already answers on {ZAP_URL} but not with this API key: "
+                "set ZAP_API_KEY or stop it."
+            )
+        return False
     except (OSError, ValueError):
         return False
 

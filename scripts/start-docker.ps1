@@ -1,4 +1,7 @@
-param([switch]$Zap)
+param(
+    [switch]$Foreground,
+    [switch]$Zap
+)
 $ErrorActionPreference = "Stop"
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
@@ -103,4 +106,36 @@ if ($Zap) {
     python scripts/zap/run_zap.py
     exit $LASTEXITCODE
 }
-docker compose @composeFiles up --build -V
+
+if ($Foreground) {
+    docker compose @composeFiles up --build -V
+    exit $LASTEXITCODE
+}
+
+docker compose @composeFiles up --build -V -d
+if ($LASTEXITCODE -ne 0) {
+    throw "Docker Compose could not start Kofre."
+}
+
+Write-Host "Waiting for Kofre to become available..."
+$ready = $false
+for ($attempt = 1; $attempt -le 30; $attempt++) {
+    $frontendReady = Test-NetConnection -ComputerName localhost -Port 5173 -InformationLevel Quiet
+    $backendReady = Test-NetConnection -ComputerName localhost -Port 8080 -InformationLevel Quiet
+    if ($frontendReady -and $backendReady) {
+        $ready = $true
+        break
+    }
+    Start-Sleep -Seconds 2
+}
+
+if (-not $ready) {
+    docker compose @composeFiles ps
+    throw "Kofre did not open ports 5173 and 8080. Check 'docker compose logs'."
+}
+
+Write-Host ""
+Write-Host "Kofre is running."
+Write-Host "Open this exact URL in your browser: https://localhost:5173"
+Write-Host "Backend: https://localhost:8080"
+Write-Host "Use -Foreground to run Docker Compose in the current terminal."

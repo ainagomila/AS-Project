@@ -108,7 +108,6 @@ async function handleForgotSubmit(payload) {
 </script>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@200;300;400;500;600;700&display=swap');
 
 :root {
   --header-h: 65px;
@@ -119,7 +118,7 @@ async function handleForgotSubmit(payload) {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-  font-family: 'Open Sans', sans-serif;
+  font-family: system-ui, -apple-system, sans-serif;
 }
 
 /* PAGE */

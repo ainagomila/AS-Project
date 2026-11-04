@@ -95,13 +95,22 @@ def test_update_alias_and_status(ana, card):
 
 
 def test_verify_card_never_returns_the_card_pin_or_cvv(ana, card):
-    url = ana.url(f"/accounts/{card[0]}/cards/{PAN}/security/verify-card")
+    url = ana.url(f"/accounts/{card[0]}/cards/{card[1]['id']}/security/verify-card")
     ok = ana.client.post(url, {"pin": PIN}, format="json")
-    assert (ok.status_code, ok.json()) == (200, {"pan": PAN, "expireDate": "05/29"})
+    assert (ok.status_code, ok.json()) == (
+        200,
+        {"pan": "**** **** **** 1111", "last4": "1111", "expireDate": "05/29"},
+    )
     wrong = ana.client.post(url, {"pin": "000000"}, format="json")
     missing = ana.client.post(url, {}, format="json")
     assert (wrong.status_code, wrong.json()["code"]) == (422, "INVALID_PIN")
     assert (missing.status_code, missing.json()["code"]) == (400, "INVALID_PIN_FORMAT")
+
+
+def test_verify_card_rejects_pan_in_url(ana, card):
+    url = ana.url(f"/accounts/{card[0]}/cards/{PAN}/security/verify-card")
+    response = ana.client.post(url, {"pin": PIN}, format="json")
+    assert (response.status_code, response.json()["code"]) == (404, "CARD_NOT_FOUND")
 
 
 def test_delete_card(ana, card):

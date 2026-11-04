@@ -319,9 +319,17 @@ def seed_customer():
         call("POST", f"{d}/accounts", tok, expect=(201,), json={
             "iban": iban, "name": name, "bank": "Kofre", "currency": "EUR"})
     call("PATCH", f"{d}/accounts/{IBAN}", tok, json={"name": "ZAP account renamed"})
-    call("POST", f"{d}/accounts/{IBAN}/cards", tok, expect=(201,), json=card_body(PAN, EXP, "zap"))
+    created_card = call(
+        "POST", f"{d}/accounts/{IBAN}/cards", tok, expect=(201,),
+        json=card_body(PAN, EXP, "zap"),
+    )
     call("POST", f"{d}/accounts/{IBAN2}/cards", tok, expect=(201,), json=card_body(PAN2, EXP2, "temp"))
-    cd = f"{d}/accounts/{IBAN}/cards/{PAN}"
+    card_id = jget(created_card, {}).get("id")
+    if not card_id:
+        RESULTS.append(("read created card identifier", 0, False, ("opaque card id",)))
+        log("FAIL created card response did not contain an opaque id")
+        return tok
+    cd = f"{d}/accounts/{IBAN}/cards/{card_id}"
     call("PATCH", cd, tok, json={"alias": "zap renamed"})
     call("PATCH", cd, tok, json={"status": "FREEZED"})
     call("PATCH", cd, tok, json={"status": "ACTIVE"})

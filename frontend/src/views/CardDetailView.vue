@@ -311,8 +311,8 @@ const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 
-// --- PAN como identificador de tarjeta (cardId) ---
-const cardPan = String(route.params.id || '')
+// --- Opaque card identifier (PAN is never placed in the URL) ---
+const cardId = String(route.params.id || '')
 
 // --- Loading / error ---
 const loading = ref(true)
@@ -320,9 +320,10 @@ const error = ref(null)
 
 // --- Datos básicos de tarjeta ---
 const card = ref({
-  pan: cardPan,
+  id: cardId,
+  pan: '',
   type: '',
-  last4: cardPan.slice(-4),
+  last4: '',
   bank: '',
   alias: '',
 })
@@ -360,14 +361,15 @@ onMounted(async () => {
       return
     }
 
-    const cardData = await getCardByPan(userStore.dni, cardPan)
+    const cardData = await getCardByPan(userStore.dni, cardId)
     if (!cardData) throw new Error('Card not found')
 
+    card.value.id = cardData.id || cardId
     card.value.bank = cardData.bank || ''
     card.value.type = cardData.type || ''
     cardStatus.value = cardData.status || ''
     card.value.alias = cardData.alias || 'My Card'
-    card.value.last4 = String(cardData.pan || cardPan).slice(-4)
+    card.value.last4 = String(cardData.last4 || '').slice(-4)
     expiryDate.value = parseExpireDate(cardData.expiryDate)
 
     const accountRef = normalizeAccountReference(cardData.iban)
@@ -424,7 +426,7 @@ async function saveName() {
 
   try {
     savingName.value = true
-    await updateCard(userStore.dni, account.value.id, cardPan, { alias: n })
+    await updateCard(userStore.dni, account.value.id, card.value.id, { alias: n })
     card.value.alias = n
     editingName.value = false
     showToast('Alias actualizado', 'success')
@@ -506,7 +508,7 @@ async function confirmDelete() {
     isDeleting.value = true
     deleteErrorMessage.value = ''
 
-    await deleteCard(userStore.dni, account.value.id, cardPan, pin)
+    await deleteCard(userStore.dni, account.value.id, card.value.id, pin)
 
     showDeletePinModal.value = false
     showToast('Card deleted', 'success')
@@ -603,7 +605,7 @@ async function verifyUnlockPin() {
   }
 
   try {
-    const data = await verifyCard(userStore.dni, account.value.id, cardPan, pin)
+    const data = await verifyCard(userStore.dni, account.value.id, card.value.id, pin)
 
     card.value.pan = data.pan
     card.value.last4 = data.pan.slice(-4)
@@ -645,7 +647,7 @@ async function freezeCard() {
   }
   try {
     const nextStatus = cardStatus.value === 'ACTIVE' ? 'FREEZED' : 'ACTIVE'
-    await updateCard(userStore.dni, account.value.id, cardPan, { status: nextStatus })
+    await updateCard(userStore.dni, account.value.id, card.value.id, { status: nextStatus })
     cardStatus.value = nextStatus
     showToast(nextStatus === 'FREEZED' ? 'Card frozen' : 'Card activated', 'success')
   } catch (e) {
@@ -660,7 +662,7 @@ async function reportIssue() {
     return
   }
   try {
-    await updateCard(userStore.dni, account.value.id, cardPan, { status: 'DEAD' })
+    await updateCard(userStore.dni, account.value.id, card.value.id, { status: 'DEAD' })
     cardStatus.value = 'DEAD'
     showToast('Card reported', 'success')
   } catch (e) {
