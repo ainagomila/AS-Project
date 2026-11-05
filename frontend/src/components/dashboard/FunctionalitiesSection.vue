@@ -30,7 +30,11 @@ const functionalities = computed(() => {
     { name: 'Profile', icon: UserRound, action: () => router.push({ name: 'Profile' }) },
   ]
   if (userStore.isStaff) {
-    const name = userStore.isAuditor ? 'Audit' : 'Admin'
+    const name = userStore.isAdmin
+      ? 'Admin'
+      : userStore.isAuditor
+        ? 'Audit'
+        : 'Operations'
     items.push({ name, icon: ShieldCheck, action: () => router.push({ name: 'Admin' }) })
   }
   return items

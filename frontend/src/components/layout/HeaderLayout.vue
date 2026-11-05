@@ -23,7 +23,8 @@
               v-if="userStore.isStaff"
               class="icon-btn"
               @click="goToAdmin"
-              aria-label="Open admin"
+              :aria-label="`Open ${staffAreaLabel}`"
+              :title="staffAreaLabel"
             >
               <ShieldCheck class="icon" />
             </button>
@@ -75,6 +76,9 @@ const userStore = useUserStore()
 const HIDE_ICONS_ROUTES = ['Login', 'Signup', 'Terms'] 
 
 const hideIcons = computed(() => HIDE_ICONS_ROUTES.includes(route.name))
+const staffAreaLabel = computed(() => (
+  userStore.isAdmin ? 'admin' : userStore.isAuditor ? 'audit' : 'operations'
+))
 
 /**
  * Click sobre el título "Kofre".

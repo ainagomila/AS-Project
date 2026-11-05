@@ -10,7 +10,7 @@ from banking.models import Account, Card
 from common import ids
 from common import validators as v
 from common.errors import AppError
-from iam.models import ADMIN, AUDITOR, CUSTOMER
+from iam.models import ADMIN, AUDITOR, CUSTOMER, OPERATIONS
 from iam.services import create_initial_account, create_user_record, find_by_dni
 
 # Fictitious people for local demos and manual testing. The DNIs carry a valid
@@ -20,6 +20,7 @@ SEED_USERS = [
     ("Bernat Puig", "10000002Q", "bernat.puig@kofre.test", "+34600000002", "male", CUSTOMER),
     ("Carla Admin", "10000003V", "carla.admin@kofre.test", "+34600000003", "female", ADMIN),
     ("Dani Auditor", "10000004H", "dani.auditor@kofre.test", "+34600000004", "other", AUDITOR),
+    ("Elena Operations", "10000005L", "elena.operations@kofre.test", "+34600000005", "female", OPERATIONS),
 ]
 # One debit card per seeded customer. The PANs are Luhn-valid and are not among
 # the numbers the README reserves for manual testing.
@@ -77,7 +78,7 @@ def _add_seed_card(account, pan, card_pin, expiry):
 
 class Command(BaseCommand):
     help = (
-        "Create demo users (two customers, an admin and an auditor), each with the "
+        "Create demo users (two customers, an admin, an auditor and operations user), each with the "
         "initial 100 EUR account; the customers also get one debit card. Users that "
         "already exist are left unchanged, but a customer without its seed card gets "
         "one. No credentials are hard-coded: pass --password/--pin/--card-pin or "

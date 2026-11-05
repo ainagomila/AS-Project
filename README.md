@@ -165,8 +165,8 @@ The back office is the shield icon in the header.
 
 Made-up values that pass both the frontend's and the backend's validation.
 
-**Seeded users.** To skip sign-up, create two customers, an admin and an
-auditor, each with the usual 100 EUR "Kofre" account. Each customer also gets
+**Seeded users.** To skip sign-up, create two customers, an admin, an auditor
+and an operations user, each with the usual 100 EUR "Kofre" account. Each customer also gets
 one active debit card ("Kofre Debit", expiring in three years). Pass
 `--card-pin` to choose the card PIN; otherwise a random one is printed once
 with the other credentials. Re-running the command leaves existing users alone,

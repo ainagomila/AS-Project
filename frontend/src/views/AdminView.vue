@@ -510,6 +510,21 @@ onMounted(async () => {
   color: #fff;
 }
 
+.admin-section select {
+  min-width: 100px;
+  padding: 6px 28px 6px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  background-color: #333;
+  color: #fff;
+  color-scheme: dark;
+}
+
+.admin-section select option {
+  background-color: #333;
+  color: #fff;
+}
+
 .admin-error {
   color: #ff8a80;
   margin-bottom: 12px;
